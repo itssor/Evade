@@ -6,27 +6,60 @@ local LocalPlayer = Evade.LocalPlayer
 local Camera = Evade.Camera
 local Mouse = Evade.Mouse
 
--- // SERVICES & CONTROLLERS (Dynamic Capture)
-local ReplicatedStorage = Services.ReplicatedStorage
-local KnitClient = debug.getupvalue(require(LocalPlayer.PlayerScripts.TS.knit).setup, 6)
-local ClientStore = require(LocalPlayer.PlayerScripts.TS.ui.store).ClientStore
+-- // STABILIZED KNIT LOADER
+local KnitClient = nil
+local SwordCont = nil
+local SprintCont = nil
+local ClientStore = nil
 
--- Dynamic Controller/Remote Grabber
-local function GetController(Match)
-    for Name, Cont in pairs(KnitClient.Controllers) do
-        if tostring(Name):find(Match) then return Cont end
+local function InitBedwars()
+    -- Wait for game load
+    repeat task.wait() until game:IsLoaded()
+    repeat task.wait() until LocalPlayer.PlayerScripts
+    
+    -- Wait for TS Scripts
+    local TS = LocalPlayer.PlayerScripts:WaitForChild("TS", 10)
+    if not TS then return false, "TS Folder not found" end
+    
+    -- Hook Knit
+    local KnitScript = TS:FindFirstChild("knit")
+    if not KnitScript then return false, "Knit Script not found" end
+    
+    local KnitPkg = require(KnitScript)
+    if not KnitPkg then return false, "Knit Require failed" end
+    
+    -- Attempt to get the internal table
+    -- Usually upvalue 6 of setup
+    local s, r = pcall(function()
+        return debug.getupvalue(KnitPkg.setup, 6)
+    end)
+    
+    if s and r and r.Controllers then
+        KnitClient = r
+        SwordCont = KnitClient.Controllers.SwordController
+        SprintCont = KnitClient.Controllers.SprintController
+        
+        -- Hook Store (Inventory)
+        local StoreScript = TS:FindFirstChild("ui") and TS.ui:FindFirstChild("store")
+        if StoreScript then
+            ClientStore = require(StoreScript).ClientStore
+        end
+        return true
+    else
+        return false, "Failed to hook Knit Controllers"
     end
-    return nil
 end
 
-local SwordCont = GetController("Sword")
-local BlockCont = GetController("Block")
-local SprintCont = GetController("Sprint")
-local ViewmodelCont = GetController("Viewmodel")
+-- // ATTEMPT LOAD
+local Loaded, Err = InitBedwars()
+if not Loaded then
+    warn("[Evade] Bedwars Hook Failed: " .. tostring(Err))
+    warn("[Evade] Falling back to Raw Remote Mode (Limited Features)")
+end
 
 -- // UI SETUP
 local Window = Library:CreateWindow({
-    Title = "Evade | Bedwars (Voidware)",
+    Title = "Evade | Bedwars (Stable)",
     Center = true, AutoShow = true, TabPadding = 8
 })
 
@@ -35,9 +68,8 @@ Library.Font = Enum.Font.Ubuntu
 local Tabs = {
     Game = Window:AddTab("Bedwars"),
     Combat = Window:AddTab("Combat"),
-    Blatant = Window:AddTab("Blatant"),
-    Utility = Window:AddTab("Utility"),
     Visuals = Window:AddTab("Visuals"),
+    Movement = Window:AddTab("Movement"),
     Settings = Window:AddTab("Settings")
 }
 
@@ -46,41 +78,37 @@ local AuraGroup = Tabs.Combat:AddLeftGroupbox("Kill Aura")
 AuraGroup:AddToggle("Killaura", { Text = "Enabled", Default = false })
 AuraGroup:AddSlider("AuraRange", { Text = "Range", Default = 18, Min = 1, Max = 22, Rounding = 1 })
 AuraGroup:AddToggle("AuraAnim", { Text = "Swing Animation", Default = true })
-AuraGroup:AddToggle("AutoToxic", { Text = "Auto Toxic", Default = false })
 
 local VelGroup = Tabs.Combat:AddRightGroupbox("Velocity")
 VelGroup:AddToggle("Velocity", { Text = "Anti-Knockback", Default = false })
 VelGroup:AddSlider("VelH", { Text = "Horizontal %", Default = 0, Min = 0, Max = 100 })
 VelGroup:AddSlider("VelV", { Text = "Vertical %", Default = 0, Min = 0, Max = 100 })
 
--- // 2. BLATANT
-local FlyGroup = Tabs.Blatant:AddLeftGroupbox("Flight")
+-- // 2. VISUALS
+local VisGroup = Tabs.Visuals:AddLeftGroupbox("ESP")
+VisGroup:AddToggle("BedESP", { Text = "Bed ESP", Default = true })
+VisGroup:AddToggle("PlayerESP", { Text = "Player ESP", Default = true })
+
+-- // 3. MOVEMENT
+local FlyGroup = Tabs.Movement:AddLeftGroupbox("Flight")
 FlyGroup:AddToggle("Flight", { Text = "Flight", Default = false }):AddKeyPicker("FlyKey", { Default = "F", Mode = "Toggle" })
 FlyGroup:AddSlider("FlySpeed", { Text = "Speed", Default = 40, Min = 10, Max = 80 })
-FlyGroup:AddToggle("HighJump", { Text = "High Jump", Default = false }):AddKeyPicker("JumpKey", { Default = "G", Mode = "Toggle" })
 
-local MoveGroup = Tabs.Blatant:AddRightGroupbox("Movement")
+local MoveGroup = Tabs.Movement:AddRightGroupbox("Movement")
 MoveGroup:AddToggle("Sprint", { Text = "Omni-Sprint", Default = true })
 MoveGroup:AddToggle("Speed", { Text = "Speed", Default = false })
 MoveGroup:AddSlider("SpeedVal", { Text = "Factor", Default = 20, Min = 16, Max = 35 })
 MoveGroup:AddToggle("NoFall", { Text = "No Fall Damage", Default = true })
-MoveGroup:AddToggle("Spider", { Text = "Spider (Climb Walls)", Default = false })
+MoveGroup:AddToggle("Spider", { Text = "Spider", Default = false })
 
--- // 3. UTILITY
-local BuildGroup = Tabs.Utility:AddLeftGroupbox("Scaffold")
-BuildGroup:AddToggle("Scaffold", { Text = "Enabled", Default = false })
-BuildGroup:AddToggle("ScaffExpand", { Text = "Expand (Prediction)", Default = false })
-
-local WorldGroup = Tabs.Utility:AddRightGroupbox("World Interaction")
+-- // 4. UTILITY
+local WorldGroup = Tabs.Game:AddLeftGroupbox("World")
 WorldGroup:AddToggle("BedNuker", { Text = "Bed Nuker", Default = false })
 WorldGroup:AddSlider("NukeRange", { Text = "Range", Default = 30, Min = 10, Max = 30 })
 WorldGroup:AddToggle("ChestSteal", { Text = "Chest Stealer", Default = false })
-WorldGroup:AddToggle("FastEat", { Text = "Fast Eat", Default = false })
 
--- // 4. VISUALS
-local VisGroup = Tabs.Visuals:AddLeftGroupbox("ESP")
-VisGroup:AddToggle("BedESP", { Text = "Bed ESP", Default = true })
-VisGroup:AddToggle("PlayerESP", { Text = "Player ESP", Default = true })
+local BuildGroup = Tabs.Game:AddRightGroupbox("Building")
+BuildGroup:AddToggle("Scaffold", { Text = "Scaffold", Default = false })
 
 -- // LOGIC FUNCTIONS
 local function GetTarget(Range)
@@ -99,6 +127,7 @@ local function GetTarget(Range)
 end
 
 local function Attack(Target)
+    -- Try Controller
     if SwordCont then
         pcall(function()
             if Library.Toggles.AuraAnim.Value then SwordCont:swingSwordAtMouse() end
@@ -110,14 +139,18 @@ local function Attack(Target)
                     ["selfPosition"] = {["value"] = LocalPlayer.Character.HumanoidRootPart.Position}
                 }
             }
-            -- Use the controller's internal remote reference if possible, else standard path
-            local Remote = Services.ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged.SwordHit
-            Remote:FireServer(args)
+            -- If controller failed to expose remote, try finding it
+            local RS = Services.ReplicatedStorage
+            local Net = RS:FindFirstChild("rbxts_include") and RS.rbxts_include.node_modules["@rbxts"].net.out._NetManaged
+            if Net and Net:FindFirstChild("SwordHit") then
+                Net.SwordHit:FireServer(args)
+            end
         end)
     end
 end
 
 local function GetBlock()
+    if not ClientStore then return nil end
     local Inv = Services.HttpService:JSONDecode(ClientStore:getState().Inventory.observedInventory.inventory).items
     for _, item in pairs(Inv) do
         if item.itemType:find("wool") or item.itemType:find("wood") or item.itemType:find("stone") then
@@ -126,13 +159,6 @@ local function GetBlock()
     end
     return nil
 end
-
-local ToxicMsgs = {"Ez", "L", "Trash", "Evade On Top", "Get Good", "Lag?", "Voidware Who?"}
-Services.Players.PlayerRemoving:Connect(function(p)
-    if Library.Toggles.AutoToxic.Value and p.Team ~= LocalPlayer.Team then
-        Services.ReplicatedStorage.DefaultChatSystemChatEvents.SayMessageRequest:FireServer(ToxicMsgs[math.random(#ToxicMsgs)], "All")
-    end
-end)
 
 -- // MAIN LOOPS
 task.spawn(function()
@@ -143,7 +169,6 @@ task.spawn(function()
         if Library.Toggles.Killaura.Value then
             local T = GetTarget(Library.Options.AuraRange.Value)
             if T then
-                -- Silent Rotations (Voidware Style)
                 local LA = LocalPlayer.Character.HumanoidRootPart.CFrame
                 LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(LA.Position, Vector3.new(T.HumanoidRootPart.Position.X, LA.Position.Y, T.HumanoidRootPart.Position.Z))
                 Attack(T)
@@ -201,8 +226,6 @@ Services.RunService.Stepped:Connect(function()
         local Block = GetBlock()
         if Block then
             local Pos = HRP.Position + Vector3.new(0, -3.5, 0)
-            if Library.Toggles.ScaffExpand.Value then Pos = Pos + (HRP.Velocity * 0.3) end
-            
             local BlockPos = Vector3.new(math.round(Pos.X/3), math.round(Pos.Y/3), math.round(Pos.Z/3))
             local Args = {
                 ["blockType"] = Block,
@@ -210,11 +233,6 @@ Services.RunService.Stepped:Connect(function()
                 ["position"] = BlockPos
             }
             Services.ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged.PlaceBlock:InvokeServer(Args)
-            
-            -- Visual Animation
-            if ViewmodelCont and ViewmodelCont.playAnimation then
-                ViewmodelCont:playAnimation(15) 
-            end
         end
     end
     
@@ -229,17 +247,18 @@ Services.RunService.Stepped:Connect(function()
         end
     end
     
-    -- Flight (LinearVelocity)
+    -- Flight
     if Library.Toggles.Flight.Value and Library.Options.FlyKey:GetState() and HRP then
         local LV = HRP:FindFirstChild("VoidFly") or Instance.new("LinearVelocity", HRP); LV.Name = "VoidFly"
         LV.MaxForce = 999999; LV.RelativeTo = Enum.ActuatorRelativeTo.World
         local Att = HRP:FindFirstChild("VoidAtt") or Instance.new("Attachment", HRP); Att.Name = "VoidAtt"; LV.Attachment0 = Att
         
         local Dir = Vector3.zero
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then Dir = Dir + Camera.CFrame.LookVector end
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then Dir = Dir - Camera.CFrame.LookVector end
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then Dir = Dir - Camera.CFrame.RightVector end
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then Dir = Dir + Camera.CFrame.RightVector end
+        local CF = Camera.CFrame
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then Dir = Dir + CF.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then Dir = Dir - CF.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then Dir = Dir - CF.RightVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then Dir = Dir + CF.RightVector end
         if Services.UserInputService:IsKeyDown(Enum.KeyCode.Space) then Dir = Dir + Vector3.new(0,1,0) end
         if Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then Dir = Dir - Vector3.new(0,1,0) end
         
@@ -267,22 +286,9 @@ Services.RunService.Stepped:Connect(function()
             HRP.Velocity = Vector3.new(HRP.Velocity.X, 35, HRP.Velocity.Z)
         end
     end
-    
-    -- High Jump
-    if Library.Toggles.HighJump.Value and Library.Options.JumpKey:GetState() and HRP then
-        HRP.Velocity = Vector3.new(HRP.Velocity.X, 60, HRP.Velocity.Z)
-    end
 end)
 
--- Fast Eat (Consumable Controller)
--- Hooks into the tool activation to consume faster
--- (Simplified for stability: Loops the Consume Remote)
-if Library.Toggles.FastEat.Value then
-    -- Logic usually requires hooking the specific consumable item controller
-    -- Placeholder for future expansion
-end
-
--- // ESP LOOP
+-- ESP Loop
 local Drawings = {}
 Services.RunService.RenderStepped:Connect(function()
     for _, d in pairs(Drawings) do d:Remove() end
@@ -313,7 +319,6 @@ Services.RunService.RenderStepped:Connect(function()
     end
 end)
 
--- // SETTINGS
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); Sense.Unload() end)
 MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
@@ -328,4 +333,4 @@ Evade.SaveManager:BuildConfigSection(Tabs.Settings)
 Evade.ThemeManager:ApplyToTab(Tabs.Settings)
 Evade.SaveManager:LoadAutoloadConfig()
 
-Library:Notify("Evade | Bedwars Loaded", 5)
+Library:Notify("Evade | Bedwars (Stable) Loaded", 5)
