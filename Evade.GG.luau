@@ -1,65 +1,105 @@
 --[[
-    EVADE.GG - MASTER LOADER (v33.0)
-    Repo: https://github.com/milkisbetter/Evade
-    Status: Bedwars Support Removed (Safety)
+    _______ __   __ _______ ______  _______
+    |    ___||  |_|  ||   _   ||   _  \|    ___|
+    |    ___||       ||       ||  | \  |    ___|
+    |_______| |_____| |___|___||__|  |_______|
+    
+    [ EVADE.GG ] - Ultimate Script Hub
+    Version: 1.5 (Modular Loader)
+    Author: MilkIsBetter
+    License: Open Source
 ]]
 
--- // 0. SINGLETON CHECK
+-- // 0. INITIALIZATION CHECK
 if getgenv().EvadeLoaded then
-    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Evade.GG", Text = "Already loaded!", Duration = 5})
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Evade.GG",
+        Text = "Script is already active!",
+        Duration = 5
+    })
     return
 end
 getgenv().EvadeLoaded = true
 
--- // CONFIGURATION
-local RepoURL = "https://raw.githubusercontent.com/milkisbetter/Evade/main/"
-local Folder = "modules/" 
+-- // 1. CONFIGURATION
+local Config = {
+    RepoURL = "https://raw.githubusercontent.com/milkisbetter/Evade/main/",
+    Folder  = "modules/", -- Case sensitive!
+    
+    -- Library URLs (Centralized for easy updates)
+    Libraries = {
+        Obsidian = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/",
+        Sense    = "https://raw.githubusercontent.com/jensonhirst/Sirius/request/library/sense/source.lua"
+    }
+}
 
--- // 1. GLOBAL ENVIRONMENT
+-- // 2. GLOBAL ENVIRONMENT SETUP
 getgenv().Evade = {
     Services = {
-        Players = game:GetService("Players"),
-        RunService = game:GetService("RunService"),
-        Workspace = game:GetService("Workspace"),
+        Players           = game:GetService("Players"),
+        RunService        = game:GetService("RunService"),
+        Workspace         = game:GetService("Workspace"),
         ReplicatedStorage = game:GetService("ReplicatedStorage"),
-        UserInputService = game:GetService("UserInputService"),
-        VirtualUser = game:GetService("VirtualUser"),
-        Lighting = game:GetService("Lighting"),
-        HttpService = game:GetService("HttpService"),
-        TeleportService = game:GetService("TeleportService"),
+        UserInputService  = game:GetService("UserInputService"),
+        VirtualUser       = game:GetService("VirtualUser"),
+        Lighting          = game:GetService("Lighting"),
+        HttpService       = game:GetService("HttpService"),
+        TeleportService   = game:GetService("TeleportService"),
         CollectionService = game:GetService("CollectionService")
     },
     LocalPlayer = game:GetService("Players").LocalPlayer,
-    Camera = game:GetService("Workspace").CurrentCamera,
-    Mouse = game:GetService("Players").LocalPlayer:GetMouse()
+    Camera      = game:GetService("Workspace").CurrentCamera,
+    Mouse       = game:GetService("Players").LocalPlayer:GetMouse()
 }
 
--- // 2. LOAD LIBRARIES (ONCE)
-local function SafeLoad(Url, Name)
+-- // 3. UTILITY FUNCTIONS
+local function SafeLoad(Url, DebugName)
     local Success, Result = pcall(function() return game:HttpGet(Url) end)
-    if not Success then return nil, "Network Error" end
+    if not Success then 
+        warn("[Evade] Failed to download: " .. DebugName)
+        return nil 
+    end
+    
     local Func, SyntaxErr = loadstring(Result)
-    if not Func then return nil, "Syntax Error: " .. tostring(SyntaxErr) end
+    if not Func then 
+        warn("[Evade] Syntax Error in " .. DebugName .. ": " .. tostring(SyntaxErr))
+        return nil 
+    end
+    
     local RunSuccess, RunResult = pcall(Func)
-    if not RunSuccess then return nil, "Runtime Error: " .. tostring(RunResult) end
+    if not RunSuccess then 
+        warn("[Evade] Runtime Error in " .. DebugName .. ": " .. tostring(RunResult))
+        return nil 
+    end
+    
     return RunResult
 end
 
-local LibRepo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+local function Notify(Title, Text, Duration)
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = Title,
+        Text = Text,
+        Duration = Duration or 5
+    })
+end
 
-getgenv().Evade.Library = SafeLoad(LibRepo .. 'Library.lua', "Obsidian Lib")
-getgenv().Evade.ThemeManager = SafeLoad(LibRepo .. 'addons/ThemeManager.lua', "ThemeManager")
-getgenv().Evade.SaveManager = SafeLoad(LibRepo .. 'addons/SaveManager.lua', "SaveManager")
-getgenv().Evade.Sense = SafeLoad('https://raw.githubusercontent.com/jensonhirst/Sirius/request/library/sense/source.lua', "Sense ESP")
+-- // 4. LIBRARY INJECTION
+Notify("Evade.GG", "Initializing Core...", 3)
+
+local Libs = Config.Libraries
+getgenv().Evade.Library      = SafeLoad(Libs.Obsidian .. 'Library.lua', "Obsidian UI")
+getgenv().Evade.ThemeManager = SafeLoad(Libs.Obsidian .. 'addons/ThemeManager.lua', "Theme Manager")
+getgenv().Evade.SaveManager  = SafeLoad(Libs.Obsidian .. 'addons/SaveManager.lua', "Save Manager")
+getgenv().Evade.Sense        = SafeLoad(Libs.Sense, "Sense ESP")
 
 -- Pre-Flight Check
 if not getgenv().Evade.Library or not getgenv().Evade.Sense then
     getgenv().EvadeLoaded = false
-    warn("CRITICAL: Libraries failed to load.")
+    Notify("Evade Critical", "Failed to load libraries. Check Console (F9).", 10)
     return
 end
 
--- Patch Sense
+-- Patch ESP Interface
 if not getgenv().Evade.Sense.EspInterface then
     getgenv().Evade.Sense.EspInterface = {
         getCharacter = function(Player) return Player.Character end,
@@ -70,35 +110,54 @@ if not getgenv().Evade.Sense.EspInterface then
     }
 end
 
--- // 3. DETECT GAME
+-- // 5. GAME DETECTION LOGIC
 local PlaceID = game.PlaceId
-local Module = "Universal" -- Default Fallback
+local Module  = "Universal" -- Default
 
-if PlaceID == 286090429 or PlaceID == 286090429 then 
-    Module = "Arsenal"
-elseif PlaceID == 80550384527033 or PlaceID == 14816132646 then 
-    Module = "FNTD2"
-elseif PlaceID == 142823291 or PlaceID == 335132309 then 
-    Module = "MM2"
+-- Game ID Database
+local Games = {
+    Arsenal       = {286090429, 286090429},
+    FNTD2         = {80550384527033, 14816132646},
+    MM2           = {142823291, 335132309},
+    -- Bedwars Removed due to Anti-Cheat intensity
+}
+
+for Name, IDs in pairs(Games) do
+    for _, ID in pairs(IDs) do
+        if PlaceID == ID then
+            Module = Name
+            break
+        end
+    end
 end
 
--- // 4. EXECUTE MODULE
-print("[Evade] Loading: " .. Module)
+-- // 6. MODULE EXECUTION
+Notify("Evade.GG", "Game Detected: " .. Module, 5)
+print("----------------------------------------")
+print("[Evade] Target Module: " .. Module)
+print("[Evade] Fetching Source...")
 
+local ModuleURL = Config.RepoURL .. Config.Folder .. Module .. ".lua"
 local Success, Err = pcall(function()
-    loadstring(game:HttpGet(RepoURL .. Folder .. Module .. ".lua"))()
+    loadstring(game:HttpGet(ModuleURL))()
 end)
 
 if not Success then
-    warn("[Evade] " .. Module .. " Failed: " .. tostring(Err))
-    warn("[Evade] Loading Universal Fallback...")
+    warn("[Evade] Failed to load " .. Module .. " Module!")
+    warn("[Evade] Error: " .. tostring(Err))
     
+    Notify("Evade Warning", "Module failed. Loading Universal fallback...", 5)
+    
+    -- Universal Fallback
+    local UnivURL = Config.RepoURL .. Config.Folder .. "Universal.lua"
     local UnivSuccess, UnivErr = pcall(function()
-        loadstring(game:HttpGet(RepoURL .. Folder .. "Universal.lua"))()
+        loadstring(game:HttpGet(UnivURL))()
     end)
     
     if not UnivSuccess then
         getgenv().EvadeLoaded = false
-        warn("[Evade] Universal Failed: " .. tostring(UnivErr))
+        Notify("Evade Error", "Universal Fallback Failed. Script Terminated.", 10)
+        warn("[Evade] Fatal Error: " .. tostring(UnivErr))
     end
 end
+print("----------------------------------------")
