@@ -5,7 +5,7 @@
     |_______| |_____| |___|___||__|  |_______|
     
     [ EVADE.GG ] - Ultimate Script Hub
-    Version: 1.6 (Rebranded)
+    Version: 1.8 (Doors Restored)
     Author: Itssor
     License: Open Source
 ]]
@@ -23,7 +23,6 @@ getgenv().EvadeLoaded = true
 
 -- // 1. CONFIGURATION
 local Config = {
-    -- UPDATED USERNAME HERE:
     RepoURL = "https://raw.githubusercontent.com/itssor/Evade/main/",
     Folder  = "modules/", 
     
@@ -115,7 +114,11 @@ local Module  = "Universal"
 local Games = {
     Arsenal       = {286090429, 286090429},
     FNTD2         = {80550384527033, 14816132646},
-    MM2           = {142823291, 335132309}
+    MM2           = {142823291, 335132309},
+    Pressure      = {12552538295},
+    TSB           = {10449761463},
+    BladeBall     = {13772394625},
+    Doors         = {6839171747, 6516141723} -- Added Doors
 }
 
 for Name, IDs in pairs(Games) do
@@ -129,7 +132,8 @@ end
 
 -- // 6. MODULE EXECUTION
 Notify("Evade.GG", "Game Detected: " .. Module, 5)
-print("[Evade] Fetching: " .. Config.RepoURL .. Config.Folder .. Module .. ".lua")
+print("----------------------------------------")
+print("[Evade] Target Module: " .. Module)
 
 local ModuleURL = Config.RepoURL .. Config.Folder .. Module .. ".lua"
 local Success, Err = pcall(function()
@@ -153,3 +157,4 @@ if not Success then
         warn("[Evade] Fatal Error: " .. tostring(UnivErr))
     end
 end
+print("----------------------------------------")
