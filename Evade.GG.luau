@@ -5,8 +5,8 @@
     |_______| |_____| |___|___||__|  |_______|
     
     [ EVADE.GG ] - Ultimate Script Hub
-    Version: 1.5 (Modular Loader)
-    Author: MilkIsBetter
+    Version: 1.6 (Rebranded)
+    Author: Itssor
     License: Open Source
 ]]
 
@@ -23,10 +23,10 @@ getgenv().EvadeLoaded = true
 
 -- // 1. CONFIGURATION
 local Config = {
-    RepoURL = "https://raw.githubusercontent.com/milkisbetter/Evade/main/",
-    Folder  = "modules/", -- Case sensitive!
+    -- UPDATED USERNAME HERE:
+    RepoURL = "https://raw.githubusercontent.com/itssor/Evade/main/",
+    Folder  = "modules/", 
     
-    -- Library URLs (Centralized for easy updates)
     Libraries = {
         Obsidian = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/",
         Sense    = "https://raw.githubusercontent.com/jensonhirst/Sirius/request/library/sense/source.lua"
@@ -92,14 +92,12 @@ getgenv().Evade.ThemeManager = SafeLoad(Libs.Obsidian .. 'addons/ThemeManager.lu
 getgenv().Evade.SaveManager  = SafeLoad(Libs.Obsidian .. 'addons/SaveManager.lua', "Save Manager")
 getgenv().Evade.Sense        = SafeLoad(Libs.Sense, "Sense ESP")
 
--- Pre-Flight Check
 if not getgenv().Evade.Library or not getgenv().Evade.Sense then
     getgenv().EvadeLoaded = false
     Notify("Evade Critical", "Failed to load libraries. Check Console (F9).", 10)
     return
 end
 
--- Patch ESP Interface
 if not getgenv().Evade.Sense.EspInterface then
     getgenv().Evade.Sense.EspInterface = {
         getCharacter = function(Player) return Player.Character end,
@@ -112,14 +110,12 @@ end
 
 -- // 5. GAME DETECTION LOGIC
 local PlaceID = game.PlaceId
-local Module  = "Universal" -- Default
+local Module  = "Universal" 
 
--- Game ID Database
 local Games = {
     Arsenal       = {286090429, 286090429},
     FNTD2         = {80550384527033, 14816132646},
-    MM2           = {142823291, 335132309},
-    -- Bedwars Removed due to Anti-Cheat intensity
+    MM2           = {142823291, 335132309}
 }
 
 for Name, IDs in pairs(Games) do
@@ -133,9 +129,7 @@ end
 
 -- // 6. MODULE EXECUTION
 Notify("Evade.GG", "Game Detected: " .. Module, 5)
-print("----------------------------------------")
-print("[Evade] Target Module: " .. Module)
-print("[Evade] Fetching Source...")
+print("[Evade] Fetching: " .. Config.RepoURL .. Config.Folder .. Module .. ".lua")
 
 local ModuleURL = Config.RepoURL .. Config.Folder .. Module .. ".lua"
 local Success, Err = pcall(function()
@@ -148,7 +142,6 @@ if not Success then
     
     Notify("Evade Warning", "Module failed. Loading Universal fallback...", 5)
     
-    -- Universal Fallback
     local UnivURL = Config.RepoURL .. Config.Folder .. "Universal.lua"
     local UnivSuccess, UnivErr = pcall(function()
         loadstring(game:HttpGet(UnivURL))()
@@ -160,4 +153,3 @@ if not Success then
         warn("[Evade] Fatal Error: " .. tostring(UnivErr))
     end
 end
-print("----------------------------------------")
