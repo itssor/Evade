@@ -1,6 +1,6 @@
 # Evade.GG
 
-![Version](https://img.shields.io/badge/version-1.5-blue) ![Status](https://img.shields.io/badge/status-working-green) ![Lua](https://img.shields.io/badge/language-Luau-orange)
+![Version](https://img.shields.io/badge/version-1.6-blue) ![Status](https://img.shields.io/badge/status-working-green) ![Lua](https://img.shields.io/badge/language-Luau-orange)
 
 **Evade** is a modular, high-performance script execution environment for Roblox. It utilizes a centralized loader to detect the active Place ID and inject optimized game-specific modules on runtime. Built on the Obsidian UI framework.
 
@@ -9,7 +9,7 @@
 Execute the following script in your executor (Solara, Wave, Synapse Z, etc.):
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/milkisbetter/Evade/refs/heads/main/Evade.GG.luau"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/itssor/Evade/refs/heads/main/Evade.GG.luau"))()
 ```
 
 **Default Keybind:** `RightShift`
@@ -45,4 +45,4 @@ The loader automatically detects the game. If the game is not supported, it defa
 ## Credits
 *   **UI:** Obsidian (Deividcomsono fork)
 *   **ESP:** Sense (Sirius)
-*   **Core Logic:** MilkIsBetter
+*   **Core Logic:** Itssor
