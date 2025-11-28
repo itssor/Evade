@@ -5,7 +5,7 @@
     |_______| |_____| |___|___||__|  |_______|
     
     [ EVADE.GG ] - Ultimate Script Hub
-    Version: 1.8 (Doors Restored)
+    Version: 1.9 (Smart Name Detection)
     Author: Itssor
     License: Open Source
 ]]
@@ -44,7 +44,8 @@ getgenv().Evade = {
         Lighting          = game:GetService("Lighting"),
         HttpService       = game:GetService("HttpService"),
         TeleportService   = game:GetService("TeleportService"),
-        CollectionService = game:GetService("CollectionService")
+        CollectionService = game:GetService("CollectionService"),
+        MarketplaceService= game:GetService("MarketplaceService")
     },
     LocalPlayer = game:GetService("Players").LocalPlayer,
     Camera      = game:GetService("Workspace").CurrentCamera,
@@ -111,6 +112,7 @@ end
 local PlaceID = game.PlaceId
 local Module  = "Universal" 
 
+-- Method 1: Exact ID Match (Fastest)
 local Games = {
     Arsenal       = {286090429, 286090429},
     FNTD2         = {80550384527033, 14816132646},
@@ -118,7 +120,7 @@ local Games = {
     Pressure      = {12552538295},
     TSB           = {10449761463},
     BladeBall     = {13772394625},
-    Doors         = {6839171747, 6516141723} -- Added Doors
+    Doors         = {6839171747, 6516141723}
 }
 
 for Name, IDs in pairs(Games) do
@@ -126,6 +128,26 @@ for Name, IDs in pairs(Games) do
         if PlaceID == ID then
             Module = Name
             break
+        end
+    end
+end
+
+-- Method 2: Name Detection (Fallback)
+if Module == "Universal" then
+    print("[Evade] ID Check failed. Scanning Game Name...")
+    local Success, Info = pcall(function()
+        return game:GetService("MarketplaceService"):GetProductInfo(PlaceID)
+    end)
+    
+    if Success and Info and Info.Name then
+        local Name = string.lower(Info.Name)
+        if string.find(Name, "arsenal") then Module = "Arsenal"
+        elseif string.find(Name, "five nights td") or string.find(Name, "fntd") then Module = "FNTD2"
+        elseif string.find(Name, "murder mystery 2") or string.find(Name, "mm2") then Module = "MM2"
+        elseif string.find(Name, "pressure") then Module = "Pressure"
+        elseif string.find(Name, "strongest battlegrounds") or string.find(Name, "tsb") then Module = "TSB"
+        elseif string.find(Name, "blade ball") then Module = "BladeBall"
+        elseif string.find(Name, "doors") then Module = "Doors"
         end
     end
 end
