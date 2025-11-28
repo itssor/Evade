@@ -1,6 +1,6 @@
 # Evade.GG
 
-![Version](https://img.shields.io/badge/version-1.6-blue) ![Status](https://img.shields.io/badge/status-working-green) ![Lua](https://img.shields.io/badge/language-Luau-orange)
+![Version](https://img.shields.io/badge/version-1.8-blue) ![Status](https://img.shields.io/badge/status-working-green) ![Lua](https://img.shields.io/badge/language-Luau-orange)
 
 **Evade** is a modular, high-performance script execution environment for Roblox. It utilizes a centralized loader to detect the active Place ID and inject optimized game-specific modules on runtime. Built on the Obsidian UI framework.
 
@@ -16,7 +16,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/itssor/Evade/refs/hea
 
 ---
 
-## Supported Modules
+## 🎮 Supported Modules
 
 The loader automatically detects the game. If the game is not supported, it defaults to the **Universal** module.
 
@@ -25,20 +25,18 @@ The loader automatically detects the game. If the game is not supported, it defa
 *   **Visuals:** Sense ESP (Box, Name, Health, Tracers).
 *   **Movement:** LinearVelocity Flight, CFrame Speed, Noclip, Infinite Jump.
 
-### 🔫 Arsenal
-*   **Hitbox Manipulation:** Visuals-safe expansion (HeadHB).
-*   **Weapon Mods:** No Recoil, No Spread, Rapid Fire, Infinite Ammo.
-*   **Visuals:** Rainbow Gun Chams.
+### 🔫 Combat Games
+*   **Arsenal:** Visuals-safe Hitbox Expander, No Recoil, Rapid Fire, Rainbow Gun.
+*   **The Strongest Battlegrounds:** Auto-Block (Animation Reading), No Ragdoll, Speed, Player ESP.
+*   **Blade Ball:** Auto-Parry (Velocity/Distance Calculation), Spam Mode, Ball ESP.
 
-### 🔪 Murder Mystery 2
-*   **Role ESP:** Detects Murderer/Sheriff via inventory scanning.
-*   **Rage:** "Kill All" loop (Teleport behind + Stab).
-*   **Farming:** Auto-Gun Grabber, Coin ESP.
+### 👁️ Horror Games
+*   **Doors:** Entity Prediction, Door/Item/Key ESP, Speed Bypass, Auto-Interact.
+*   **Pressure:** Entity Radar (Angler/Pandemonium), Locker ESP, Keycard ESP, No Blindness.
 
-### 🛡️ Five Nights TD
-*   **Macro Engine:** Record and replay unit placements.
-*   **Priority System:** Sort placement order (1-6) for optimal farming.
-*   **Auto-Rejoin:** Automatically re-executes script upon match teleport.
+### 🔪 Strategy & Mystery
+*   **Murder Mystery 2:** Role ESP (Inventory Scan), Kill All (Teleport), Auto-Gun.
+*   **Five Nights TD:** Smart Macro (Record/Replay), Priority Placement System, Auto-Rejoin.
 
 ---
 
