@@ -20,13 +20,19 @@ local Tabs = {
     Settings = Window:AddTab("Settings")
 }
 
+-- // COMBAT TAB
 local AimbotGroup = Tabs.Combat:AddLeftGroupbox("Aimbot Engine")
 AimbotGroup:AddToggle("AimbotEnabled", { Text = "Enabled", Default = false })
 AimbotGroup:AddLabel("Keybind"):AddKeyPicker("AimbotKey", { Default = "MB2", Mode = "Hold", Text = "Aim Key" })
-AimbotGroup:AddDropdown("AimbotMethod", { Values = {"Camera", "Mouse"}, Default = 1, Multi = false, Text = "Method" })
+-- Added "Position" to the dropdown
+AimbotGroup:AddDropdown("AimbotMethod", { Values = {"Camera", "Mouse", "Position"}, Default = 1, Multi = false, Text = "Method" })
 AimbotGroup:AddDropdown("TargetPart", { Values = {"Head", "HumanoidRootPart", "Torso"}, Default = 1, Multi = false, Text = "Target Part" })
 AimbotGroup:AddSlider("Smoothing", { Text = "Smoothing", Default = 0.5, Min = 0.01, Max = 1, Rounding = 2 })
 AimbotGroup:AddToggle("StickyAim", { Text = "Sticky Aim", Default = false })
+
+local AntiAimGroup = Tabs.Combat:AddRightGroupbox("Anti-Aim")
+AntiAimGroup:AddToggle("Spinbot", { Text = "Spinbot", Default = false })
+AntiAimGroup:AddSlider("SpinSpeed", { Text = "Spin Speed", Default = 20, Min = 1, Max = 100, Rounding = 0 })
 
 local ChecksGroup = Tabs.Combat:AddRightGroupbox("Checks & Visuals")
 ChecksGroup:AddToggle("TeamCheck", { Text = "Team Check", Default = true })
@@ -34,6 +40,7 @@ ChecksGroup:AddToggle("WallCheck", { Text = "Wall Check", Default = false })
 ChecksGroup:AddToggle("DrawFOV", { Text = "Draw FOV", Default = true }):AddColorPicker("FOVColor", { Default = Color3.fromRGB(255, 255, 255) })
 ChecksGroup:AddSlider("FOVRadius", { Text = "Radius", Default = 100, Min = 10, Max = 800, Rounding = 0 })
 
+-- // VISUALS TAB
 local ESPGroup = Tabs.Visuals:AddLeftGroupbox("Sense ESP")
 ESPGroup:AddToggle("MasterESP", { Text = "Master Switch", Default = false }):OnChanged(function(v)
     Sense.teamSettings.enemy.enabled = v
@@ -45,6 +52,7 @@ ESPGroup:AddToggle("ESPName", { Text = "Names", Default = false }):OnChanged(fun
 ESPGroup:AddToggle("ESPHealth", { Text = "Health", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.healthBar = v; Sense.teamSettings.friendly.healthBar = v end)
 ESPGroup:AddToggle("ESPTracer", { Text = "Tracers", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.tracer = v; Sense.teamSettings.friendly.tracer = v end)
 
+-- // MOVEMENT TAB
 local FlightGroup = Tabs.Movement:AddLeftGroupbox("Flight System")
 FlightGroup:AddToggle("FlightEnabled", { Text = "Enable Flight", Default = false }):AddKeyPicker("FlightKey", { Default = "F", Mode = "Toggle", Text = "Toggle" })
 FlightGroup:AddDropdown("FlightMode", { Values = {"LinearVelocity", "CFrame", "BodyVelocity"}, Default = 1, Multi = false, Text = "Mode" })
@@ -64,6 +72,7 @@ local FlingGroup = Tabs.Movement:AddRightGroupbox("Fling")
 FlingGroup:AddToggle("FlingEnabled", { Text = "Fling Aura", Default = false }):AddKeyPicker("FlingKey", { Default = "X", Mode = "Toggle" })
 FlingGroup:AddDropdown("FlingMode", { Values = {"Spin", "Loop"}, Default = 1, Text = "Method" })
 
+-- // SETTINGS
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function() 
     getgenv().EvadeLoaded = false
@@ -82,6 +91,7 @@ Evade.SaveManager:BuildConfigSection(Tabs.Settings)
 Evade.ThemeManager:ApplyToTab(Tabs.Settings)
 Evade.SaveManager:LoadAutoloadConfig()
 
+-- // LOGIC
 local LockedTarget = nil
 local FOVCircle = Drawing.new("Circle"); FOVCircle.Thickness = 1; FOVCircle.NumSides = 64; FOVCircle.Filled = false; FOVCircle.Visible = false
 
@@ -98,7 +108,8 @@ end
 local function GetClosestPlayer()
     local Closest = nil
     local ShortestDist = math.huge
-    local MousePos = Vector2.new(Mouse.X, Mouse.Y)
+    -- Use GetMouseLocation for accuracy
+    local MousePos = Services.UserInputService:GetMouseLocation()
     local FOV = Library.Options.FOVRadius.Value
     
     for _, Plr in pairs(Services.Players:GetPlayers()) do
@@ -112,6 +123,7 @@ local function GetClosestPlayer()
                      if not Library.Toggles.WallCheck.Value or IsVisible(Target) then
                         local Pos, OnScreen = Camera:WorldToViewportPoint(Target.Position)
                         if OnScreen then
+                            -- Calc dist from screen center (Vector2)
                             local Dist = (MousePos - Vector2.new(Pos.X, Pos.Y)).Magnitude
                             if Dist < FOV and Dist < ShortestDist then
                                 ShortestDist = Dist
@@ -127,6 +139,7 @@ local function GetClosestPlayer()
 end
 
 Services.RunService.RenderStepped:Connect(function()
+    -- FOV Circle
     if Library.Toggles.DrawFOV.Value and Library.Toggles.AimbotEnabled.Value then
         FOVCircle.Visible = true
         FOVCircle.Radius = Library.Options.FOVRadius.Value
@@ -136,6 +149,7 @@ Services.RunService.RenderStepped:Connect(function()
         FOVCircle.Visible = false
     end
 
+    -- Aimbot
     if Library.Toggles.AimbotEnabled.Value and Library.Options.AimbotKey:GetState() then
         if Library.Toggles.StickyAim.Value and LockedTarget and LockedTarget.Parent then
         else
@@ -143,15 +157,41 @@ Services.RunService.RenderStepped:Connect(function()
         end
         
         if LockedTarget then
-            if Library.Options.AimbotMethod.Value == "Camera" then
+            local Method = Library.Options.AimbotMethod.Value
+            
+            if Method == "Camera" then
+                -- Camera Lerp
                 Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, LockedTarget.Position), Library.Options.Smoothing.Value)
-            elseif Library.Options.AimbotMethod.Value == "Mouse" then
+                
+            elseif Method == "Mouse" then
+                -- Mouse Move Relative (Fixed Calculation)
                 local Pos = Camera:WorldToViewportPoint(LockedTarget.Position)
-                mousemoverel((Pos.X - Mouse.X) * Library.Options.Smoothing.Value, ((Pos.Y + 36) - Mouse.Y) * Library.Options.Smoothing.Value)
+                local MouseLoc = Services.UserInputService:GetMouseLocation()
+                
+                -- Calculate difference
+                local X = (Pos.X - MouseLoc.X) * Library.Options.Smoothing.Value
+                local Y = (Pos.Y - MouseLoc.Y) * Library.Options.Smoothing.Value
+                
+                -- Use mousemoverel (Standard executor function)
+                if mousemoverel then mousemoverel(X, Y) end
+                
+            elseif Method == "Position" and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                -- Character Face Target (Semi-Rage)
+                -- We only change the Y rotation to look at them horizontally
+                local Root = LocalPlayer.Character.HumanoidRootPart
+                local LookPos = Vector3.new(LockedTarget.Position.X, Root.Position.Y, LockedTarget.Position.Z)
+                Root.CFrame = CFrame.new(Root.Position, LookPos)
             end
         end
     else
         LockedTarget = nil
+    end
+    
+    -- Spinbot (Render Loop for smooth visuals, could also be Stepped)
+    if Library.Toggles.Spinbot.Value and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local Root = LocalPlayer.Character.HumanoidRootPart
+        -- Simple Y-Axis Spin
+        Root.CFrame = Root.CFrame * CFrame.Angles(0, math.rad(Library.Options.SpinSpeed.Value), 0)
     end
 end)
 
@@ -160,6 +200,7 @@ Services.RunService.Stepped:Connect(function()
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
 
+    -- Flight Logic
     if Library.Toggles.FlightEnabled.Value and Library.Options.FlightKey:GetState() and HRP then
         local Mode = Library.Options.FlightMode.Value
         local Speed = Library.Options.FlightSpeed.Value
@@ -197,6 +238,7 @@ Services.RunService.Stepped:Connect(function()
         end
     end
     
+    -- Speed Hack
     if Library.Toggles.SpeedEnabled.Value and Hum then
         local Mode = Library.Options.SpeedMode.Value
         if Mode == "WalkSpeed" then
@@ -212,6 +254,7 @@ Services.RunService.Stepped:Connect(function()
         if Hum and Hum.WalkSpeed ~= 16 then Hum.WalkSpeed = 16 end
     end
     
+    -- Noclip
     if Library.Toggles.Noclip.Value and HRP then
         if Library.Options.NoclipMode.Value == "Collision" then
             for _,v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
@@ -222,6 +265,7 @@ Services.RunService.Stepped:Connect(function()
         end
     end
     
+    -- Fling
     if Library.Toggles.FlingEnabled.Value and Library.Options.FlingKey:GetState() and HRP then
         if Library.Options.FlingMode.Value == "Spin" then
             local AV = HRP:FindFirstChild("SWFling") or Instance.new("BodyAngularVelocity", HRP); AV.Name = "SWFling"
@@ -247,4 +291,4 @@ Services.UserInputService.JumpRequest:Connect(function()
     end
 end)
 
-Library:Notify("Evade | Universal Loaded", 5)
+Library:Notify("Evade Universal Loaded", 5)
