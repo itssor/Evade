@@ -6,6 +6,7 @@ local LocalPlayer = Evade.LocalPlayer
 local Camera = Evade.Camera
 local Mouse = Evade.Mouse
 
+-- // CONTROLLER HOOK
 local KnitClient = nil
 local SwordCont = nil
 local BlockCont = nil
@@ -14,20 +15,18 @@ local ClientStore = nil
 local function GetKnit()
     repeat task.wait() until game:IsLoaded()
     local TS = Services.ReplicatedStorage:WaitForChild("TS", 10)
-    local KnitPkg = TS and require(TS:WaitForChild("knit", 10))
-    
+    if not TS then return nil end
+    local KnitPkg = require(TS:WaitForChild("knit", 10))
     if not KnitPkg then return nil end
     
+    -- Heuristic Scan for Upvalue
     local Setup = KnitPkg.setup
-    if not Setup then return nil end
-    
     for i = 1, 10 do
         local Val = debug.getupvalue(Setup, i)
-        if type(Val) == "table" and Val.Controllers and Val.Services then
+        if type(Val) == "table" and Val.Controllers then
             return Val
         end
     end
-    
     return nil
 end
 
@@ -38,7 +37,7 @@ local function Init()
         task.wait(0.1)
     until KnitClient or (tick() - Start > 10)
     
-    if not KnitClient then return false end
+    if not KnitClient then error("Knit not found (Timeout)") end -- FORCE ERROR TO TRIGGER FALLBACK
 
     for Name, Cont in pairs(KnitClient.Controllers) do
         if Name:find("Sword") or (rawget(Cont, "swingSwordAtMouse") and rawget(Cont, "attackEntity")) then
@@ -47,23 +46,23 @@ local function Init()
             BlockCont = Cont
         elseif Name:find("AntiCheat") or Name:find("Raven") then
             if rawget(Cont, "disable") then Cont:disable() end
-            if rawget(Cont, "stop") then Cont:stop() end
         end
     end
     
-    local UI = LocalPlayer.PlayerScripts:FindFirstChild("TS") and LocalPlayer.PlayerScripts.TS:FindFirstChild("ui")
-    local Store = UI and UI:FindFirstChild("store")
-    if Store then ClientStore = require(Store).ClientStore end
+    -- Store Hook
+    pcall(function()
+        local Store = LocalPlayer.PlayerScripts.TS.ui.store
+        ClientStore = require(Store).ClientStore
+    end)
     
     return true
 end
 
-local Success = Init()
-if not Success then 
-    Library:Notify("Critical: Knit Hook Failed", 10) 
-    return 
-end
+-- RUN INIT
+Init() -- This will error if it fails, handing control back to Loader
 
+-- // UI SETUP STARTS HERE...
+-- (Paste the rest of the Bedwars UI code from v6.0 here)
 local Window = Library:CreateWindow({
     Title = "Evade | Bedwars (Deep Hook)",
     Center = true, AutoShow = true, TabPadding = 8
