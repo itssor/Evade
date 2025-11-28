@@ -1,85 +1,105 @@
---[[
-    EVADE.GG - BEDWARS BOOTSTRAPPER (Voidware Logic)
-    Features: Signature Scanning, AC Bypass, Knit Hook
-]]
-
 local Evade = getgenv().Evade
 local Library = Evade.Library
 local Services = Evade.Services
 local LocalPlayer = Evade.LocalPlayer
 local Camera = Evade.Camera
 
--- // 1. THE BOOTSTRAPPER (Memory Scanner)
+-- // 1. ROBUST BOOTSTRAPPER
 local Bedwars = {
     Knit = nil,
-    Client = {},
     Controllers = {}
 }
 
 local function Status(msg)
-    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Evade Bootstrapper", Text = msg, Duration = 2})
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Evade Loader", Text = msg, Duration = 2})
 end
 
-Status("Hooking Knit Framework...")
-
--- A. WaitForGame
-repeat task.wait() until game:IsLoaded()
-repeat task.wait() until LocalPlayer.PlayerScripts
-local TS = LocalPlayer.PlayerScripts:WaitForChild("TS", 10)
-if not TS then error("TS Not Found") end
-
--- B. Extract Knit (Voidware Method)
-local KnitScript = TS:WaitForChild("knit", 10)
-local KnitPkg = require(KnitScript)
-if not KnitPkg then error("Knit Failed") end
-
--- C. Recursive Upvalue Scan (The "Steal")
--- We scan the setup function's upvalues to find the main registry table
-local function ScanForKnit(Func)
-    for i = 1, 20 do
-        local val = debug.getupvalue(Func, i)
-        if type(val) == "table" and val.Controllers and val.Services then
-            return val
+-- A. Safe Upvalue Scanner
+local function ScanUpvalues(Func)
+    if type(Func) ~= "function" then return nil end
+    local Info = debug.getinfo(Func)
+    local Nups = Info.nups -- Get exact number of upvalues to avoid "out of range" error
+    
+    for i = 1, Nups do
+        local Val = debug.getupvalue(Func, i)
+        if type(Val) == "table" and Val.Controllers and Val.Services then
+            return Val
         end
     end
     return nil
 end
 
-Bedwars.Knit = ScanForKnit(KnitPkg.setup)
-if not Bedwars.Knit then error("Knit Table Not Found") end
+-- B. Garbage Collection Scanner (Backup)
+local function GarbageScan()
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "table" and rawget(v, "Controllers") and rawget(v, "Services") then
+            -- Verify it's the real Knit by checking for a known controller
+            if v.Controllers.SwordController or v.Controllers.AppController then
+                return v
+            end
+        end
+    end
+    return nil
+end
 
-Status("Scanning Controllers...")
-
--- D. Signature Mapping (The "Update Proofing")
--- We map internal names to our names based on what functions they contain
-local ControllerSignatures = {
-    ["SwordController"] = "swingSwordAtMouse",
-    ["BlockController"] = "placeBlock",
-    ["KnockbackTable"] = "registerKnockback",
-    ["SprintController"] = "startSprinting",
-    ["ViewmodelController"] = "playAnimation",
-    ["AppController"] = "isAppOpen"
-}
-
-for Name, Controller in pairs(Bedwars.Knit.Controllers) do
-    for MyName, FuncName in pairs(ControllerSignatures) do
-        if rawget(Controller, FuncName) then
-            Bedwars.Controllers[MyName] = Controller
-            print("[Evade] Hooked: " .. MyName)
+-- C. Initialization Logic
+local function Init()
+    Status("Waiting for Game...")
+    repeat task.wait() until game:IsLoaded()
+    
+    -- method 1: Hook Require
+    local TS = Services.ReplicatedStorage:WaitForChild("TS", 10)
+    local KnitScript = TS and TS:WaitForChild("knit", 10)
+    
+    if KnitScript then
+        local KnitPkg = require(KnitScript)
+        if KnitPkg and KnitPkg.setup then
+            Bedwars.Knit = ScanUpvalues(KnitPkg.setup)
         end
     end
     
-    -- E. Anticheat Bypass (Raven/AC Disable)
-    if Name:find("AntiCheat") or Name:find("Raven") then
-        if rawget(Controller, "disable") then Controller:disable() end
-        if rawget(Controller, "stop") then Controller:stop() end
-        print("[Evade] Disabled AC: " .. Name)
+    -- method 2: Deep Scan (if method 1 failed)
+    if not Bedwars.Knit then
+        Status("Standard Hook Failed. Deep Scanning...")
+        Bedwars.Knit = GarbageScan()
     end
+    
+    if not Bedwars.Knit then return false end
+
+    -- D. Controller Mapping
+    local Signatures = {
+        ["SwordController"] = "swingSwordAtMouse",
+        ["BlockController"] = "placeBlock",
+        ["SprintController"] = "startSprinting",
+        ["ViewmodelController"] = "playAnimation"
+    }
+
+    for Name, Cont in pairs(Bedwars.Knit.Controllers) do
+        for MyName, Func in pairs(Signatures) do
+            if rawget(Cont, Func) then
+                Bedwars.Controllers[MyName] = Cont
+            end
+        end
+        -- Disable AC
+        if Name:find("AntiCheat") or Name:find("Raven") then
+            if rawget(Cont, "disable") then Cont:disable() end
+        end
+    end
+    
+    return true
 end
 
--- // 2. UI CONSTRUCTION
+local Success = Init()
+if not Success then 
+    warn("Bedwars Init Failed")
+    return -- Let Loader fallback to Universal
+end
+
+Status("Bedwars Hooked.")
+
+-- // 2. UI SETUP
 local Window = Library:CreateWindow({
-    Title = "Evade | Bedwars (Voidware)",
+    Title = "Evade | Bedwars (Void Logic)",
     Center = true, AutoShow = true, TabPadding = 8
 })
 
@@ -93,92 +113,83 @@ local Tabs = {
     Settings = Window:AddTab("Settings")
 }
 
--- // 3. FEATURES (Using Hooked Controllers)
-
 -- COMBAT
-local CombatGroup = Tabs.Combat:AddLeftGroupbox("Kill Aura")
-CombatGroup:AddToggle("Killaura", { Text = "Kill Aura", Default = false })
-CombatGroup:AddSlider("KillauraRange", { Text = "Range", Default = 18, Min = 1, Max = 22, Rounding = 1 })
-CombatGroup:AddToggle("KillauraAnim", { Text = "Swing Animation", Default = true })
+local Aura = Tabs.Combat:AddLeftGroupbox("Kill Aura")
+Aura:AddToggle("Killaura", { Text = "Enabled", Default = false })
+Aura:AddSlider("AuraRange", { Text = "Range", Default = 18, Min = 1, Max = 21 })
+Aura:AddToggle("AuraAnim", { Text = "Animation", Default = true })
 
-local VelGroup = Tabs.Combat:AddRightGroupbox("Velocity")
-VelGroup:AddToggle("Velocity", { Text = "Anti-Knockback", Default = false })
-VelGroup:AddSlider("VelH", { Text = "Horizontal", Default = 0, Min = 0, Max = 100 })
-VelGroup:AddSlider("VelV", { Text = "Vertical", Default = 0, Min = 0, Max = 100 })
+local Vel = Tabs.Combat:AddRightGroupbox("Mods")
+Vel:AddToggle("Velocity", { Text = "Anti-Knockback", Default = false })
+Vel:AddSlider("VelH", { Text = "Horizontal", Default = 0, Min = 0, Max = 100 })
+Vel:AddSlider("VelV", { Text = "Vertical", Default = 0, Min = 0, Max = 100 })
 
 -- MOVEMENT
-local FlyGroup = Tabs.Movement:AddLeftGroupbox("Flight")
-FlyGroup:AddToggle("Flight", { Text = "Flight", Default = false }):AddKeyPicker("FlyKey", { Default = "F", Mode = "Toggle" })
-FlyGroup:AddSlider("FlySpeed", { Text = "Speed", Default = 40, Min = 10, Max = 80 })
+local Fly = Tabs.Movement:AddLeftGroupbox("Flight")
+Fly:AddToggle("Flight", { Text = "Flight", Default = false }):AddKeyPicker("FlyKey", { Default = "F", Mode = "Toggle" })
+Fly:AddSlider("FlySpeed", { Text = "Speed", Default = 40, Min = 10, Max = 80 })
 
-local MoveGroup = Tabs.Movement:AddRightGroupbox("Mods")
-MoveGroup:AddToggle("Sprint", { Text = "Omni-Sprint", Default = true })
-MoveGroup:AddToggle("Speed", { Text = "Speed", Default = false })
-MoveGroup:AddSlider("SpeedVal", { Text = "Factor", Default = 23, Min = 16, Max = 35 })
-MoveGroup:AddToggle("Spider", { Text = "Spider", Default = false })
-MoveGroup:AddToggle("NoFall", { Text = "No Fall", Default = true })
+local Move = Tabs.Movement:AddRightGroupbox("Movement")
+Move:AddToggle("Sprint", { Text = "Omni-Sprint", Default = true })
+Move:AddToggle("Speed", { Text = "Speed", Default = false })
+Move:AddSlider("SpeedVal", { Text = "Factor", Default = 20, Min = 16, Max = 35 })
+Move:AddToggle("NoFall", { Text = "No Fall", Default = true })
+Move:AddToggle("Spider", { Text = "Spider", Default = false })
 
 -- WORLD
-local WorldGroup = Tabs.Game:AddLeftGroupbox("World")
-WorldGroup:AddToggle("BedNuker", { Text = "Bed Nuker", Default = false })
-WorldGroup:AddSlider("NukeRange", { Text = "Range", Default = 30, Min = 10, Max = 30 })
-WorldGroup:AddToggle("ChestSteal", { Text = "Chest Stealer", Default = false })
+local World = Tabs.Game:AddLeftGroupbox("World")
+World:AddToggle("BedNuker", { Text = "Bed Nuker", Default = false })
+World:AddSlider("NukeRange", { Text = "Range", Default = 30, Min = 10, Max = 30 })
+World:AddToggle("ChestSteal", { Text = "Chest Stealer", Default = false })
 
-local BuildGroup = Tabs.Game:AddRightGroupbox("Building")
-BuildGroup:AddToggle("Scaffold", { Text = "Scaffold", Default = false })
+local Build = Tabs.Game:AddRightGroupbox("Building")
+Build:AddToggle("Scaffold", { Text = "Scaffold", Default = false })
 
 -- VISUALS
-local VisGroup = Tabs.Visuals:AddLeftGroupbox("ESP")
-VisGroup:AddToggle("BedESP", { Text = "Bed ESP", Default = true })
-VisGroup:AddToggle("PlayerESP", { Text = "Player ESP", Default = true })
+local Vis = Tabs.Visuals:AddLeftGroupbox("ESP")
+Vis:AddToggle("BedESP", { Text = "Bed ESP", Default = true })
+Vis:AddToggle("PlayerESP", { Text = "Player ESP", Default = true })
 
--- // 4. LOGIC ENGINE
-
--- Helpers
-local function GetTarget(Dist)
-    local T, D = nil, Dist
+-- // 3. LOGIC LOOPS
+local function GetTarget(Range)
+    local T, D = nil, Range
     for _, p in pairs(Services.Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Team ~= LocalPlayer.Team and p.Character then
             local r = p.Character:FindFirstChild("HumanoidRootPart")
             local h = p.Character:FindFirstChild("Humanoid")
             if r and h and h.Health > 0 then
-                local mag = (r.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
-                if mag < D then D = mag; T = p.Character end
+                local dist = (r.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if dist < D then D = dist; T = p.Character end
             end
         end
     end
     return T
 end
 
--- Main Loop
 task.spawn(function()
     while true do
         if not LocalPlayer.Character then task.wait(); continue end
         local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         
-        -- Killaura (Controller Method)
+        -- Killaura
         if Library.Toggles.Killaura.Value and HRP then
-            local Target = GetTarget(Library.Options.AuraRange.Value)
-            if Target then
-                -- Rotation
-                HRP.CFrame = CFrame.new(HRP.Position, Vector3.new(Target.HumanoidRootPart.Position.X, HRP.Position.Y, Target.HumanoidRootPart.Position.Z))
+            local T = GetTarget(Library.Options.AuraRange.Value)
+            if T then
+                -- Silent Rotate
+                HRP.CFrame = CFrame.new(HRP.Position, Vector3.new(T.HumanoidRootPart.Position.X, HRP.Position.Y, T.HumanoidRootPart.Position.Z))
                 
-                -- Attack
+                -- Attack via Controller
                 local Sword = Bedwars.Controllers.SwordController
                 if Sword then
                     if Library.Toggles.AuraAnim.Value then Sword:swingSwordAtMouse() end
-                    
-                    -- Voidware Args
                     local args = {
                         ["chargedAttack"] = {["chargeRatio"] = 0},
-                        ["entityInstance"] = Target,
+                        ["entityInstance"] = T,
                         ["validate"] = {
-                            ["targetPosition"] = {["value"] = Target.HumanoidRootPart.Position},
+                            ["targetPosition"] = {["value"] = T.HumanoidRootPart.Position},
                             ["selfPosition"] = {["value"] = HRP.Position}
                         }
                     }
-                    -- Fire Remote Manually if Controller methods are hidden
-                    -- (Most controllers store the remote in 'SwordHit' or similar)
                     Services.ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged.SwordHit:FireServer(args)
                 end
             end
@@ -204,62 +215,55 @@ task.spawn(function()
     end
 end)
 
--- Physics Loop
 Services.RunService.Stepped:Connect(function()
     if not LocalPlayer.Character then return end
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
     
-    -- Scaffold (Block Placer)
-    if Library.Toggles.Scaffold.Value and HRP and Bedwars.Controllers.BlockController then
-        -- Simple block check logic
-        local BlockType = "wool_white" -- Simplified; needs inventory check
-        local Pos = HRP.Position + Vector3.new(0, -3.5, 0) + (HRP.Velocity * 0.2)
-        local BPos = Vector3.new(math.round(Pos.X/3), math.round(Pos.Y/3), math.round(Pos.Z/3))
-        
-        Services.ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged.PlaceBlock:InvokeServer({
-            ["blockType"] = BlockType, ["blockData"] = 0, ["position"] = BPos
-        })
-    end
-    
-    -- Flight
     if Library.Toggles.Flight.Value and Library.Options.FlyKey:GetState() and HRP then
         local LV = HRP:FindFirstChild("VoidFly") or Instance.new("LinearVelocity", HRP); LV.Name = "VoidFly"
         LV.MaxForce = 999999; LV.RelativeTo = Enum.ActuatorRelativeTo.World
         local Att = HRP:FindFirstChild("VoidAtt") or Instance.new("Attachment", HRP); Att.Name = "VoidAtt"; LV.Attachment0 = Att
         
         local Dir = Vector3.zero
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then Dir = Dir + Camera.CFrame.LookVector end
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then Dir = Dir - Camera.CFrame.LookVector end
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then Dir = Dir - Camera.CFrame.RightVector end
-        if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then Dir = Dir + Camera.CFrame.RightVector end
+        local CF = Camera.CFrame
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then Dir = Dir + CF.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then Dir = Dir - CF.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then Dir = Dir - CF.RightVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then Dir = Dir + CF.RightVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.Space) then Dir = Dir + Vector3.new(0,1,0) end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then Dir = Dir - Vector3.new(0,1,0) end
         
         LV.VectorVelocity = Dir * Library.Options.FlySpeed.Value
-        if HRP.Position.Y < -10 then HRP.Velocity = Vector3.new(0, 50, 0) end -- Void save
+        if HRP.Position.Y < -10 then HRP.Velocity = Vector3.new(0, 50, 0) end
     else
         if HRP:FindFirstChild("VoidFly") then HRP.VoidFly:Destroy() end
     end
     
-    -- Velocity
     if Library.Toggles.Velocity.Value and HRP then
         if HRP.Velocity.Magnitude > 20 or HRP.Velocity.Y > 10 then
              HRP.Velocity = Vector3.new(HRP.Velocity.X * (Library.Options.VelH.Value/100), HRP.Velocity.Y * (Library.Options.VelV.Value/100), HRP.Velocity.Z * (Library.Options.VelH.Value/100))
         end
     end
     
-    -- Speed
     if Library.Toggles.Speed.Value and Hum then
         Hum.WalkSpeed = Library.Options.SpeedVal.Value
         if Bedwars.Controllers.SprintController then Bedwars.Controllers.SprintController:startSprinting() end
     end
     
-    -- No Fall
     if Library.Toggles.NoFall.Value then
         Services.ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged.GroundHit:FireServer()
     end
+    
+    if Library.Toggles.Scaffold.Value and HRP and Bedwars.Controllers.BlockController then
+        local Pos = HRP.Position + Vector3.new(0, -3.5, 0) + (HRP.Velocity * 0.2)
+        local BPos = Vector3.new(math.round(Pos.X/3), math.round(Pos.Y/3), math.round(Pos.Z/3))
+        Services.ReplicatedStorage.rbxts_include.node_modules["@rbxts"].net.out._NetManaged.PlaceBlock:InvokeServer({
+            ["blockType"] = "wool_white", ["blockData"] = 0, ["position"] = BPos
+        })
+    end
 end)
 
--- ESP Loop
 local Drawings = {}
 Services.RunService.RenderStepped:Connect(function()
     for _, d in pairs(Drawings) do d:Remove() end
@@ -290,7 +294,6 @@ Services.RunService.RenderStepped:Connect(function()
     end
 end)
 
--- // SETTINGS
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); Sense.Unload() end)
 MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
@@ -305,4 +308,4 @@ Evade.SaveManager:BuildConfigSection(Tabs.Settings)
 Evade.ThemeManager:ApplyToTab(Tabs.Settings)
 Evade.SaveManager:LoadAutoloadConfig()
 
-Status("Loaded.")
+Library:Notify("Evade | Bedwars Loaded", 5)
