@@ -42,7 +42,7 @@ Farm:AddToggle('AutoRejoin', { Text = 'Reload on Teleport', Default = true })
 
 LocalPlayer.OnTeleport:Connect(function(State)
     if Library.Toggles.AutoRejoin.Value and queue_on_teleport then
-        queue_on_teleport(string.format([[repeat task.wait() until game:IsLoaded(); pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/milkisbetter/Evade/main/Loader.lua"))() end)]]))
+        queue_on_teleport(string.format([[repeat task.wait() until game:IsLoaded(); pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/itssor/Evade/main/Evade.GG.luau"))() end)]]))
     end
 end)
 
