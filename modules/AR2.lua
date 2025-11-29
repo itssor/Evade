@@ -1,4 +1,3 @@
--- // PRE-FLIGHT
 repeat task.wait() until getgenv().Evade
 local Evade = getgenv().Evade
 
@@ -6,7 +5,6 @@ local StartTime = tick()
 repeat task.wait() until Evade.Library or (tick() - StartTime > 10)
 if not Evade.Library then warn("[Evade] Library Missing"); return end
 
--- // IMPORTS
 local Library = Evade.Library
 local Services = Evade.Services
 local Sense = Evade.Sense
@@ -15,9 +13,69 @@ local Camera = Evade.Camera
 local Mouse = Evade.Mouse
 local Workspace = Services.Workspace
 
+-- // 1. CUSTOM PERSISTENT ESP MANAGER
+local ObjectESP = {
+    Cache = {},
+    Enabled = true
+}
+
+function ObjectESP.Add(Obj, Config)
+    if not Obj or ObjectESP.Cache[Obj] then return end
+    
+    local Text = Drawing.new("Text")
+    Text.Visible = false
+    Text.Center = true
+    Text.Outline = true
+    Text.Size = 13
+    Text.Text = Config.Name or "Unknown"
+    Text.Color = Config.Color or Color3.new(1,1,1)
+
+    ObjectESP.Cache[Obj] = { Text = Text, Config = Config, Root = Obj }
+end
+
+function ObjectESP.Remove(Obj)
+    if ObjectESP.Cache[Obj] then
+        ObjectESP.Cache[Obj].Text:Remove()
+        ObjectESP.Cache[Obj] = nil
+    end
+end
+
+function ObjectESP.Clear()
+    for Obj, _ in pairs(ObjectESP.Cache) do
+        ObjectESP.Remove(Obj)
+    end
+end
+
+-- Update Loop
+Services.RunService.RenderStepped:Connect(function()
+    for Obj, Data in pairs(ObjectESP.Cache) do
+        if not Obj or not Obj.Parent then
+            ObjectESP.Remove(Obj)
+            continue
+        end
+
+        local IsEnabled = false
+        if Data.Config.Type == "Zombie" and Library.Toggles.ZombieESP.Value then IsEnabled = true end
+        if Data.Config.Type == "Loot" and Library.Toggles.LootESP.Value then IsEnabled = true end
+        if Data.Config.Type == "Vehicle" and Library.Toggles.VehicleESP.Value then IsEnabled = true end
+
+        if IsEnabled and ObjectESP.Enabled then
+            local Pos, Vis = Camera:WorldToViewportPoint(Obj.Position)
+            if Vis then
+                Data.Text.Visible = true
+                Data.Text.Position = Vector2.new(Pos.X, Pos.Y)
+            else
+                Data.Text.Visible = false
+            end
+        else
+            Data.Text.Visible = false
+        end
+    end
+end)
+
 -- // UI SETUP
 local Window = Library:CreateWindow({
-    Title = "Evade | AR2",
+    Title = "Evade | AR2 (Stable)",
     Center = true, AutoShow = true, TabPadding = 8
 })
 
@@ -35,6 +93,7 @@ local SilentGroup = Tabs.Combat:AddLeftGroupbox("Silent Aim")
 SilentGroup:AddToggle("SilentAim", { Text = "Silent Aim", Default = false })
 SilentGroup:AddSlider("SilentFOV", { Text = "FOV", Default = 150, Min = 10, Max = 800 })
 SilentGroup:AddToggle("DrawSilent", { Text = "Draw FOV", Default = true }):AddColorPicker("SilentColor", { Default = Color3.fromRGB(255, 0, 0) })
+SilentGroup:AddToggle("SnapLines", { Text = "Snap Lines", Default = false, Tooltip = "Draws line to target" })
 SilentGroup:AddToggle("WallCheck", { Text = "Wall Check", Default = true })
 
 local GunGroup = Tabs.Combat:AddRightGroupbox("Gun Mods")
@@ -48,125 +107,100 @@ PlayerGroup:AddToggle("MasterESP", { Text = "Master Switch", Default = false }):
     Sense.teamSettings.enemy.enabled = v
     Sense.teamSettings.friendly.enabled = v 
     Sense.Load()
+    ObjectESP.Enabled = v
 end)
 PlayerGroup:AddToggle("ESPBox", { Text = "Boxes", Default = true }):OnChanged(function(v) Sense.teamSettings.enemy.box = v; Sense.teamSettings.friendly.box = v end)
 PlayerGroup:AddToggle("ESPName", { Text = "Names", Default = true }):OnChanged(function(v) Sense.teamSettings.enemy.name = v; Sense.teamSettings.friendly.name = v end)
 PlayerGroup:AddToggle("ESPHealth", { Text = "Health", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.healthBar = v; Sense.teamSettings.friendly.healthBar = v end)
 PlayerGroup:AddToggle("ESPTracer", { Text = "Tracers", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.tracer = v; Sense.teamSettings.friendly.tracer = v end)
-PlayerGroup:AddToggle("ESPDist", { Text = "Distance", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.distance = v; Sense.teamSettings.friendly.distance = v end)
 
-local ZombieGroup = Tabs.Visuals:AddRightGroupbox("World ESP")
-ZombieGroup:AddToggle("ZombieESP", { Text = "Zombie ESP", Default = false })
-ZombieGroup:AddToggle("LootESP", { Text = "Rare Loot ESP", Default = false })
-ZombieGroup:AddToggle("VehicleESP", { Text = "Vehicle ESP", Default = false })
+local CustomVis = Tabs.Visuals:AddRightGroupbox("World ESP")
+CustomVis:AddToggle("ZombieESP", { Text = "Zombie ESP", Default = false })
+CustomVis:AddToggle("LootESP", { Text = "Rare Loot ESP", Default = false })
+CustomVis:AddToggle("VehicleESP", { Text = "Vehicle ESP", Default = false })
 
 -- // MOVEMENT
-local MoveGroup = Tabs.Movement:AddLeftGroupbox("Character")
-MoveGroup:AddToggle("InfStamina", { Text = "Infinite Stamina", Default = false })
-MoveGroup:AddToggle("Speed", { Text = "Speedhack", Default = false })
-MoveGroup:AddSlider("SpeedVal", { Text = "Factor", Default = 20, Min = 16, Max = 50 })
-
-local FlightGroup = Tabs.Movement:AddRightGroupbox("Flight")
+local FlightGroup = Tabs.Movement:AddLeftGroupbox("Flight")
 FlightGroup:AddToggle("FlightEnabled", { Text = "Enable Flight", Default = false }):AddKeyPicker("FlightKey", { Default = "F", Mode = "Toggle", Text = "Toggle" })
 FlightGroup:AddSlider("FlightSpeed", { Text = "Speed", Default = 50, Min = 10, Max = 300 })
 FlightGroup:AddDropdown("FlightMode", { Values = {"LinearVelocity", "CFrame", "BodyVelocity"}, Default = 1, Multi = false, Text = "Mode" })
 
--- // LOGIC: WORLD SCANNER (Zombies & Loot)
-local Drawings = {}
-local EntityCache = {}
+local SpeedGroup = Tabs.Movement:AddRightGroupbox("Speed")
+SpeedGroup:AddToggle("SpeedEnabled", { Text = "Enable Speed", Default = false })
+SpeedGroup:AddSlider("WalkSpeed", { Text = "Factor", Default = 20, Min = 16, Max = 50 })
+SpeedGroup:AddToggle("InfStamina", { Text = "Infinite Stamina", Default = false })
+SpeedGroup:AddToggle("InfJump", { Text = "Infinite Jump", Default = false })
+SpeedGroup:AddToggle("Noclip", { Text = "Noclip", Default = false })
 
-local function ScanWorld()
-    table.clear(EntityCache)
-    
-    -- Zombies
-    if Library.Toggles.ZombieESP.Value then
-        local ZFolder = Workspace:FindFirstChild("Zombies") or Workspace:FindFirstChild("Animals")
-        if ZFolder then
-            for _, z in pairs(ZFolder:GetChildren()) do
-                if z:FindFirstChild("HumanoidRootPart") and z:FindFirstChild("Humanoid") and z.Humanoid.Health > 0 then
-                    table.insert(EntityCache, {Obj = z.HumanoidRootPart, Name = "Infected", Color = Color3.fromRGB(255, 150, 0)})
-                end
-            end
-        end
-    end
-
-    -- Loot & Vehicles (Throttled Scan)
-    if tick() % 2 < 0.1 then
-        if Library.Toggles.LootESP.Value then
-            for _, v in pairs(Workspace:GetDescendants()) do
-                if v.Name == "Military Crate" or v.Name == "Police Crate" then
-                    if v.PrimaryPart then
-                         table.insert(EntityCache, {Obj = v.PrimaryPart, Name = v.Name, Color = Color3.fromRGB(0, 255, 0)})
-                    end
-                end
-            end
-        end
-        if Library.Toggles.VehicleESP.Value then
-            local VFolder = Workspace:FindFirstChild("Vehicles")
-            if VFolder then
-                for _, v in pairs(VFolder:GetChildren()) do
-                    if v.PrimaryPart then
-                        table.insert(EntityCache, {Obj = v.PrimaryPart, Name = v.Name, Color = Color3.fromRGB(0, 100, 255)})
-                    end
-                end
-            end
-        end
-    end
-end
-
+-- // LOGIC: SCANNER
 task.spawn(function()
     while true do
-        ScanWorld()
+        -- ZOMBIES
+        local ZFolder = Workspace:FindFirstChild("Zombies") or Workspace:FindFirstChild("Animals")
+        if ZFolder then
+            for _, z in pairs(ZFolder:GetDescendants()) do
+                if z:IsA("Model") and z:FindFirstChild("HumanoidRootPart") and z:FindFirstChild("Humanoid") then
+                    if not Services.Players:GetPlayerFromCharacter(z) then
+                        ObjectESP.Add(z.HumanoidRootPart, {Name = "Infected", Color = Color3.fromRGB(255, 170, 0), Type = "Zombie"})
+                    end
+                end
+            end
+        end
+
+        -- LOOT
+        if Library.Toggles.LootESP.Value then
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if (v.Name == "Military Crate" or v.Name == "Police Crate" or v.Name:find("Gun")) and v:IsA("Model") and v.PrimaryPart then
+                    ObjectESP.Add(v.PrimaryPart, {Name = v.Name, Color = Color3.fromRGB(0, 255, 0), Type = "Loot"})
+                end
+            end
+        end
+
+        -- VEHICLES
+        local VFolder = Workspace:FindFirstChild("Vehicles")
+        if VFolder then
+            for _, v in pairs(VFolder:GetChildren()) do
+                if v.PrimaryPart then
+                    ObjectESP.Add(v.PrimaryPart, {Name = v.Name, Color = Color3.fromRGB(0, 100, 255), Type = "Vehicle"})
+                end
+            end
+        end
+
         task.wait(1)
     end
 end)
 
--- // LOGIC: RENDER LOOP
+-- // LOGIC: SILENT AIM & SNAP LINES
 local FOVCircle = Drawing.new("Circle"); FOVCircle.Thickness=1; FOVCircle.NumSides=64; FOVCircle.Filled=false; FOVCircle.Visible=false
+local SnapLine = Drawing.new("Line"); SnapLine.Thickness=1; SnapLine.Visible=false; SnapLine.Transparency=1
 
-Services.RunService.RenderStepped:Connect(function()
-    -- Cleanup
-    for _, d in pairs(Drawings) do d:Remove() end
-    Drawings = {}
+local function IsVisible(TargetPart)
+    local Origin = Camera.CFrame.Position
+    local Direction = (TargetPart.Position - Origin).Unit * (TargetPart.Position - Origin).Magnitude
+    local Params = RaycastParams.new()
+    Params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    Params.FilterType = Enum.RaycastFilterType.Exclude
+    local Result = Services.Workspace:Raycast(Origin, Direction, Params)
+    return Result == nil
+end
 
-    -- World ESP
-    for _, t in pairs(EntityCache) do
-        if t.Obj and t.Obj.Parent then
-            local Pos, Vis = Camera:WorldToViewportPoint(t.Obj.Position)
-            if Vis then
-                local T = Drawing.new("Text")
-                T.Visible = true; T.Text = t.Name; T.Color = t.Color; T.Center = true; T.Outline = true; T.Size = 13
-                T.Position = Vector2.new(Pos.X, Pos.Y)
-                table.insert(Drawings, T)
-            end
-        end
-    end
-
-    -- FOV
-    if Library.Toggles.DrawSilent.Value and Library.Toggles.SilentAim.Value then
-        FOVCircle.Visible = true
-        FOVCircle.Radius = Library.Options.SilentFOV.Value
-        FOVCircle.Color = Library.Options.SilentColor.Value
-        FOVCircle.Position = Services.UserInputService:GetMouseLocation()
-    else
-        FOVCircle.Visible = false
-    end
-end)
-
--- // LOGIC: SILENT AIM
 local function GetClosest()
     local C = nil; local D = Library.Options.SilentFOV.Value
     local MP = Services.UserInputService:GetMouseLocation()
     
+    -- Scan Players
     for _, p in pairs(Services.Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-            -- Basic checks
-            local Pos, Vis = Camera:WorldToViewportPoint(p.Character.Head.Position)
-            if Vis then
-                local Dist = (MP - Vector2.new(Pos.X, Pos.Y)).Magnitude
-                if Dist < D then
-                    if not Library.Toggles.WallCheck.Value or #Camera:GetPartsObscuringTarget({p.Character.Head.Position}, {LocalPlayer.Character, p.Character, Camera}) == 0 then
-                         D = Dist; C = p.Character.Head
+        if p ~= LocalPlayer then
+            local Char = p.Character
+            if Char then
+                local Head = Char:FindFirstChild("Head")
+                if Head then
+                    if not Library.Toggles.WallCheck.Value or IsVisible(Head) then
+                        local Pos, Vis = Camera:WorldToViewportPoint(Head.Position)
+                        if Vis then
+                            local Dist = (MP - Vector2.new(Pos.X, Pos.Y)).Magnitude
+                            if Dist < D then D = Dist; C = Head end
+                        end
                     end
                 end
             end
@@ -174,6 +208,42 @@ local function GetClosest()
     end
     return C
 end
+
+Services.RunService.RenderStepped:Connect(function()
+    -- Update Color Variables
+    local SilentColor = Library.Options.SilentColor.Value
+    local MousePos = Services.UserInputService:GetMouseLocation()
+
+    -- FOV
+    if Library.Toggles.DrawSilent.Value and Library.Toggles.SilentAim.Value then
+        FOVCircle.Visible = true
+        FOVCircle.Radius = Library.Options.SilentFOV.Value
+        FOVCircle.Color = SilentColor
+        FOVCircle.Position = MousePos
+    else
+        FOVCircle.Visible = false
+    end
+
+    -- Snap Lines
+    if Library.Toggles.SnapLines.Value and Library.Toggles.SilentAim.Value then
+        local Target = GetClosest()
+        if Target then
+            local Pos, Vis = Camera:WorldToViewportPoint(Target.Position)
+            if Vis then
+                SnapLine.Visible = true
+                SnapLine.Color = SilentColor
+                SnapLine.From = MousePos
+                SnapLine.To = Vector2.new(Pos.X, Pos.Y)
+            else
+                SnapLine.Visible = false
+            end
+        else
+            SnapLine.Visible = false
+        end
+    else
+        SnapLine.Visible = false
+    end
+end)
 
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
@@ -186,7 +256,6 @@ mt.__namecall = newcclosure(function(self, ...)
     if Library.Toggles.SilentAim.Value and method == "FireServer" and (self.Name == "Fire" or self.Name == "Shoot" or self.Name == "Projectiles") then
         local Target = GetClosest()
         if Target then
-            -- AR2 often accepts a CFrame or Vector3 for bullet direction
             for i, v in pairs(args) do
                 if typeof(v) == "Vector3" then
                     args[i] = (Target.Position - Camera.CFrame.Position).Unit * 1000
@@ -196,22 +265,20 @@ mt.__namecall = newcclosure(function(self, ...)
                     break
                 end
             end
-            return oldNamecall(self, unpack(args))
+            if oldNamecall then return oldNamecall(self, unpack(args)) end
         end
     end
     return oldNamecall(self, ...)
 end)
 setreadonly(mt, true)
 
--- // LOGIC: GUN MODS & STAMINA
+-- // MOVEMENT & RECOIL
 task.spawn(function()
     while true do
-        if Library.Toggles.NoRecoil.Value or Library.Toggles.NoSpread.Value or Library.Toggles.NoSway.Value then
+        if Library.Toggles.NoRecoil.Value then
             for _, v in pairs(getgc(true)) do
                 if type(v) == "table" and rawget(v, "Recoil") then
-                    if Library.Toggles.NoRecoil.Value then v.Recoil = 0; v.Kick = 0 end
-                    if Library.Toggles.NoSpread.Value then v.Spread = 0 end
-                    if Library.Toggles.NoSway.Value then v.Sway = 0 end
+                    v.Recoil = 0; v.Spread = 0; v.Kick = 0; v.Sway = 0
                 end
             end
         end
@@ -221,35 +288,62 @@ end)
 
 Services.RunService.Stepped:Connect(function()
     if not LocalPlayer.Character then return end
-    
-    -- Infinite Stamina
-    if Library.Toggles.InfStamina.Value then
-        local Stats = LocalPlayer.Character:FindFirstChild("Stats") -- AR2 often uses this
-        if Stats and Stats:FindFirstChild("Stamina") then
-            Stats.Stamina.Value = 100
-        end
-    end
-    
-    -- Movement Suite (Flight/Speed/Noclip)
-    -- [Copy standard movement logic here - kept brief for length]
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
     
-    if Library.Toggles.FlightEnabled.Value and HRP and Library.Options.FlightKey:GetState() then
-         -- (Standard Flight Logic)
-         local LV = HRP:FindFirstChild("SWFly") or Instance.new("LinearVelocity", HRP); LV.Name="SWFly"
-         LV.VectorVelocity = Camera.CFrame.LookVector * Library.Options.FlightSpeed.Value
-         LV.Attachment0 = HRP:FindFirstChild("RootAttachment")
+    if Library.Toggles.InfStamina.Value then
+        local Stats = LocalPlayer.Character:FindFirstChild("Stats")
+        if Stats and Stats:FindFirstChild("Stamina") then Stats.Stamina.Value = 100 end
+    end
+
+    if Library.Toggles.FlightEnabled.Value and Library.Options.FlightKey:GetState() and HRP then
+        local Mode = Library.Options.FlightMode.Value
+        local Speed = Library.Options.FlightSpeed.Value
+        local Dir = Vector3.zero
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then Dir = Dir + Camera.CFrame.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then Dir = Dir - Camera.CFrame.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then Dir = Dir - Camera.CFrame.RightVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then Dir = Dir + Camera.CFrame.RightVector end
+        
+        local LV = HRP:FindFirstChild("SWFly") or Instance.new("LinearVelocity", HRP); LV.Name = "SWFly"
+        LV.MaxForce = 999999; LV.RelativeTo = Enum.ActuatorRelativeTo.World
+        LV.Attachment0 = HRP:FindFirstChild("RootAttachment") or Instance.new("Attachment", HRP)
+        LV.VectorVelocity = Dir * Speed
+        
+        if Mode == "CFrame" then HRP.Anchored = true; HRP.CFrame = HRP.CFrame + (Dir * (Speed/50)) else HRP.Anchored = false end
     else
-         if HRP and HRP:FindFirstChild("SWFly") then HRP.SWFly:Destroy() end
+        if HRP and HRP:FindFirstChild("SWFly") then HRP.SWFly:Destroy() end
+        if HRP then HRP.Anchored = false end
     end
     
-    if Library.Toggles.Speed.Value and Hum then
-         Hum.WalkSpeed = Library.Options.SpeedVal.Value
+    if Library.Toggles.SpeedEnabled.Value and Hum then
+        Hum.WalkSpeed = Library.Options.WalkSpeed.Value
+    end
+    
+    if Library.Toggles.Noclip.Value and HRP then
+        if Library.Options.NoclipMode.Value == "Collision" then 
+            for _,v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
+        end
+    end
+end)
+
+Services.UserInputService.JumpRequest:Connect(function()
+    if Library.Toggles.InfJump.Value and LocalPlayer.Character then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
     end
 end)
 
 -- // SETTINGS
+local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
+MenuGroup:AddButton("Unload", function() 
+    getgenv().EvadeLoaded = false
+    ObjectESP.Clear()
+    Library:Unload() 
+    Sense.Unload() 
+end)
+MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
+Library.ToggleKeybind = Library.Options.MenuKey
+
 Evade.ThemeManager:SetLibrary(Library)
 Evade.SaveManager:SetLibrary(Library)
 Evade.SaveManager:IgnoreThemeSettings()
