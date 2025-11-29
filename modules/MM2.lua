@@ -16,7 +16,7 @@ local Workspace = Services.Workspace
 
 -- // UI SETUP
 local Window = Library:CreateWindow({
-    Title = "Evade | MM2 (Reforged)",
+    Title = "Evade | MM2 (Complete)",
     Center = true, AutoShow = true, TabPadding = 8
 })
 
@@ -26,6 +26,7 @@ local Tabs = {
     Main = Window:AddTab("Main"),
     Combat = Window:AddTab("Combat"),
     Visuals = Window:AddTab("Visuals"),
+    Movement = Window:AddTab("Movement"),
     Settings = Window:AddTab("Settings")
 }
 
@@ -34,7 +35,7 @@ local Roles = {}
 local CoinContainer = Workspace:FindFirstChild("Normal") and Workspace.Normal:FindFirstChild("CoinContainer")
 local LockedTarget = nil
 
--- // FEATURES
+-- // FEATURES: MAIN
 local FarmGroup = Tabs.Main:AddLeftGroupbox("Farming")
 FarmGroup:AddToggle("CoinFarm", { Text = "Auto Farm Coins", Default = false })
 FarmGroup:AddToggle("AutoGun", { Text = "Auto Grab Gun", Default = true })
@@ -44,15 +45,34 @@ RageGroup:AddToggle("KillAll", { Text = "Kill All (Murderer)", Default = false }
 RageGroup:AddToggle("Fling", { Text = "Fling Aura", Default = false })
 RageGroup:AddToggle("GodMode", { Text = "Invisible God Mode", Default = false, Tooltip = "Resets character to apply" })
 
+-- // FEATURES: COMBAT
 local CombatGroup = Tabs.Combat:AddLeftGroupbox("Silent Aim")
 CombatGroup:AddToggle("SilentAim", { Text = "Silent Aim", Default = false })
 CombatGroup:AddSlider("SilentFOV", { Text = "FOV", Default = 150, Min = 10, Max = 800, Rounding = 0 })
 CombatGroup:AddToggle("DrawFOV", { Text = "Draw FOV", Default = false })
 CombatGroup:AddDropdown("SilentTarget", { Values = {"Murderer", "Sheriff", "All"}, Default = 1, Text = "Target Priority" })
 
+local HitboxGroup = Tabs.Combat:AddRightGroupbox("Hitbox Expander")
+HitboxGroup:AddToggle("Hitbox", { Text = "Expand Hitboxes", Default = false })
+HitboxGroup:AddSlider("HitboxSize", { Text = "Size", Default = 13, Min = 2, Max = 25, Rounding = 1 })
+HitboxGroup:AddSlider("HitboxTrans", { Text = "Transparency", Default = 0.5, Min = 0, Max = 1, Rounding = 1 })
+
+-- // FEATURES: VISUALS
 local ESPGroup = Tabs.Visuals:AddLeftGroupbox("ESP")
-ESPGroup:AddToggle("RoleESP", { Text = "Role ESP", Default = true })
+ESPGroup:AddToggle("RoleESP", { Text = "Role ESP (Colors)", Default = true })
+ESPGroup:AddToggle("ShowInnocents", { Text = "Show Innocents", Default = true })
 ESPGroup:AddToggle("CoinESP", { Text = "Coin ESP", Default = false })
+
+-- // FEATURES: MOVEMENT (Restored)
+local FlightGroup = Tabs.Movement:AddLeftGroupbox("Flight")
+FlightGroup:AddToggle("Flight", { Text = "Enable Flight", Default = false }):AddKeyPicker("FlightKey", { Default = "F", Mode = "Toggle" })
+FlightGroup:AddSlider("FlightSpeed", { Text = "Speed", Default = 50, Min = 10, Max = 300 })
+
+local SpeedGroup = Tabs.Movement:AddRightGroupbox("Speed")
+SpeedGroup:AddToggle("Speed", { Text = "Speed Hack", Default = false })
+SpeedGroup:AddSlider("WalkSpeed", { Text = "Factor", Default = 24, Min = 16, Max = 100 })
+SpeedGroup:AddToggle("Noclip", { Text = "Noclip", Default = false })
+SpeedGroup:AddToggle("InfJump", { Text = "Infinite Jump", Default = false })
 
 -- // LOGIC: ROLE SCANNER
 local function GetRole(Plr)
@@ -70,9 +90,7 @@ end
 task.spawn(function()
     while true do
         for _, v in pairs(Services.Players:GetPlayers()) do
-            if v ~= LocalPlayer then
-                Roles[v] = GetRole(v)
-            end
+            if v ~= LocalPlayer then Roles[v] = GetRole(v) end
         end
         task.wait(0.5)
     end
@@ -90,10 +108,9 @@ local function GetSilentTarget()
             
             if Mode == "All" then IsValid = true
             elseif Mode == "Murderer" and Role == "Murderer" then IsValid = true
-            elseif Mode == "Sheriff" and Role == "Sheriff" then IsValid = true 
-            end
+            elseif Mode == "Sheriff" and Role == "Sheriff" then IsValid = true end
 
-            -- Auto-Switch Logic: If I am Sheriff, shoot Murderer. If I am Murderer, shoot Sheriff.
+            -- Auto-Switch
             local MyRole = GetRole(LocalPlayer)
             if MyRole == "Sheriff" and Role == "Murderer" then IsValid = true end
             if MyRole == "Murderer" and Role == "Sheriff" then IsValid = true end
@@ -122,42 +139,60 @@ mt.__namecall = newcclosure(function(self, ...)
     if Library.Toggles.SilentAim.Value and method == "FireServer" and tostring(self) == "Shoot" then
         local Target = GetSilentTarget()
         if Target then
-            -- MM2 Shoot Remote args: (Position, ...)
             args[1] = Target.Position
             return oldNamecall(self, unpack(args))
         end
     end
-    
     return oldNamecall(self, ...)
 end)
 setreadonly(mt, true)
+
+-- // LOGIC: HITBOX EXPANDER
+task.spawn(function()
+    while true do
+        if Library.Toggles.Hitbox.Value then
+            local Size = Library.Options.HitboxSize.Value
+            local Trans = Library.Options.HitboxTrans.Value
+            
+            for _, v in pairs(Services.Players:GetPlayers()) do
+                if v ~= LocalPlayer and v.Character then
+                    pcall(function()
+                        -- Expand RootPart
+                        local HB = v.Character:FindFirstChild("HumanoidRootPart")
+                        if HB then
+                            HB.CanCollide = false
+                            HB.Transparency = Trans
+                            HB.Size = Vector3.new(Size, Size, Size)
+                        end
+                    end)
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end)
 
 -- // LOGIC: COIN FARM (Tween)
 task.spawn(function()
     while true do
         if Library.Toggles.CoinFarm.Value and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            -- Scan for coins (Dynamic Search)
             local Coins = {}
             if CoinContainer then
-                for _, v in pairs(CoinContainer:GetChildren()) do
-                    if v.Name == "Coin_Server" then table.insert(Coins, v) end
-                end
+                for _, v in pairs(CoinContainer:GetChildren()) do if v.Name == "Coin_Server" then table.insert(Coins, v) end end
             end
-            -- Fallback scan
+            -- Fallback
             if #Coins == 0 then
-                for _, v in pairs(Workspace:GetDescendants()) do
-                    if v.Name == "Coin_Server" then table.insert(Coins, v) end
-                end
+                for _, v in pairs(Workspace:GetDescendants()) do if v.Name == "Coin_Server" then table.insert(Coins, v) end end
             end
 
             for _, Coin in pairs(Coins) do
                 if not Library.Toggles.CoinFarm.Value then break end
-                if Coin:FindFirstChild("Coin") then -- The visual part
+                if Coin:FindFirstChild("Coin") then
                     local Root = LocalPlayer.Character.HumanoidRootPart
                     local Tween = Services.TweenService:Create(Root, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {CFrame = Coin.Coin.CFrame})
                     Tween:Play()
                     Tween.Completed:Wait()
-                    firetouchinterest(Root, Coin.Coin, 0) -- Force touch
+                    firetouchinterest(Root, Coin.Coin, 0)
                     firetouchinterest(Root, Coin.Coin, 1)
                 end
             end
@@ -166,17 +201,14 @@ task.spawn(function()
     end
 end)
 
--- // LOGIC: KILL ALL
+-- // LOGIC: KILL ALL & AUTO GUN
 task.spawn(function()
     while true do
+        -- Kill All
         if Library.Toggles.KillAll.Value and LocalPlayer.Character then
-            local Knife = LocalPlayer.Character:FindFirstChild("Knife")
-            if not Knife and LocalPlayer.Backpack:FindFirstChild("Knife") then
-                LocalPlayer.Character.Humanoid:EquipTool(LocalPlayer.Backpack.Knife)
-                Knife = LocalPlayer.Character:FindFirstChild("Knife")
-            end
-
+            local Knife = LocalPlayer.Character:FindFirstChild("Knife") or LocalPlayer.Backpack:FindFirstChild("Knife")
             if Knife then
+                if Knife.Parent == LocalPlayer.Backpack then LocalPlayer.Character.Humanoid:EquipTool(LocalPlayer.Backpack.Knife) end
                 for _, Target in pairs(Services.Players:GetPlayers()) do
                     if Target ~= LocalPlayer and Target.Character and Target.Character:FindFirstChild("HumanoidRootPart") and Target.Character.Humanoid.Health > 0 then
                         LocalPlayer.Character.HumanoidRootPart.CFrame = Target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 2)
@@ -185,6 +217,15 @@ task.spawn(function()
                         task.wait(0.25)
                     end
                 end
+            end
+        end
+        
+        -- Auto Gun
+        if Library.Toggles.AutoGun.Value and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local Drop = Services.Workspace:FindFirstChild("GunDrop")
+            if Drop then
+                LocalPlayer.Character.HumanoidRootPart.CFrame = Drop.CFrame
+                task.wait(0.2)
             end
         end
         task.wait(0.1)
@@ -200,11 +241,8 @@ Services.RunService.Stepped:Connect(function()
         Vel.AngularVelocity = Vector3.new(0, 9999, 0)
         Vel.MaxTorque = Vector3.new(0, math.huge, 0)
         
-        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-            if v:IsA("BasePart") then v.CanCollide = false end
-        end
+        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
         
-        -- Move to nearest player
         for _, P in pairs(Services.Players:GetPlayers()) do
             if P ~= LocalPlayer and P.Character and P.Character:FindFirstChild("HumanoidRootPart") then
                 if (P.Character.HumanoidRootPart.Position - Root.Position).Magnitude < 10 then
@@ -221,10 +259,50 @@ Services.RunService.Stepped:Connect(function()
     end
 end)
 
+-- // LOGIC: MOVEMENT LOOP
+Services.RunService.Stepped:Connect(function()
+    if not LocalPlayer.Character then return end
+    local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
+
+    -- Flight
+    if Library.Toggles.Flight.Value and Library.Options.FlightKey:GetState() and HRP then
+        local LV = HRP:FindFirstChild("SorWareFlight") or Instance.new("LinearVelocity", HRP)
+        LV.Name = "SorWareFlight"; LV.MaxForce = 999999; LV.RelativeTo = Enum.ActuatorRelativeTo.World
+        local Att = HRP:FindFirstChild("SorWareAtt") or Instance.new("Attachment", HRP); Att.Name = "SorWareAtt"; LV.Attachment0 = Att
+        
+        local Dir = Vector3.zero
+        local CamCF = Camera.CFrame
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then Dir = Dir + CamCF.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.S) then Dir = Dir - CamCF.LookVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.A) then Dir = Dir - CamCF.RightVector end
+        if Services.UserInputService:IsKeyDown(Enum.KeyCode.D) then Dir = Dir + CamCF.RightVector end
+        
+        LV.VectorVelocity = Dir * Library.Options.FlightSpeed.Value
+        local BV = HRP:FindFirstChild("SorWareHold") or Instance.new("BodyVelocity", HRP); BV.Name = "SorWareHold"; BV.MaxForce = Vector3.new(0, math.huge, 0); BV.Velocity = Vector3.zero
+    else
+        if HRP then
+            if HRP:FindFirstChild("SorWareFlight") then HRP.SorWareFlight:Destroy() end
+            if HRP:FindFirstChild("SorWareHold") then HRP.SorWareHold:Destroy() end
+        end
+    end
+    
+    -- Speed
+    if Library.Toggles.Speed.Value and Hum then
+        Hum.WalkSpeed = Library.Options.WalkSpeed.Value
+    end
+    
+    -- Noclip
+    if Library.Toggles.Noclip.Value then
+        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+    end
+end)
+
 -- // LOGIC: GOD MODE
 Services.RunService.RenderStepped:Connect(function()
     if Library.Toggles.GodMode.Value and LocalPlayer.Character then
-        -- Simple Sit Glitch Godmode
         local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
         if Hum then Hum.Sit = true end
     end
@@ -251,11 +329,11 @@ Services.RunService.RenderStepped:Connect(function()
     -- Coin ESP
     if Library.Toggles.CoinESP.Value then
         local Coins = {}
-        if CoinContainer then 
-             for _,v in pairs(CoinContainer:GetChildren()) do table.insert(Coins, v) end 
-        end
+        if CoinContainer then for _,v in pairs(CoinContainer:GetChildren()) do table.insert(Coins, v) end end
+        if #Coins == 0 then for _, v in pairs(Workspace:GetDescendants()) do if v.Name == "Coin_Server" then table.insert(Coins, v) end end end
+        
         for _, Coin in pairs(Coins) do
-            if Coin.Name == "Coin_Server" and Coin:FindFirstChild("Coin") then
+            if Coin:FindFirstChild("Coin") then
                 local Pos, Vis = Camera:WorldToViewportPoint(Coin.Coin.Position)
                 if Vis then
                     local T = Drawing.new("Text"); T.Visible=true; T.Text="."; T.Color=Color3.fromRGB(255,255,0); T.Center=true; T.Size=20; T.Position=Vector2.new(Pos.X, Pos.Y)
@@ -276,7 +354,7 @@ Services.RunService.RenderStepped:Connect(function()
                     if Role == "Murderer" then Color = Color3.fromRGB(255, 0, 0); Text = "MURDERER" end
                     if Role == "Sheriff" then Color = Color3.fromRGB(0, 0, 255); Text = "SHERIFF" end
                     
-                    if Role ~= "Innocent" then -- Only show special roles
+                    if Role ~= "Innocent" or Library.Toggles.ShowInnocents.Value then
                         local T = Drawing.new("Text"); T.Visible=true; T.Text=Text; T.Color=Color; T.Center=true; T.Outline=true; T.Position=Vector2.new(Pos.X, Pos.Y - 40)
                         table.insert(Drawings, T)
                         
@@ -305,4 +383,4 @@ Evade.SaveManager:BuildConfigSection(Tabs.Settings)
 Evade.ThemeManager:ApplyToTab(Tabs.Settings)
 Evade.SaveManager:LoadAutoloadConfig()
 
-Library:Notify("Evade | MM2 (Reforged) Loaded", 5)
+Library:Notify("Evade | MM2 Loaded", 5)
