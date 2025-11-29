@@ -26,7 +26,6 @@ local Tabs = {
     Settings = Window:AddTab("Settings")
 }
 
--- // COMBAT
 local AimbotGroup = Tabs.Combat:AddLeftGroupbox("Rage")
 AimbotGroup:AddToggle("SilentAim", { Text = "Silent Aim", Default = false })
 AimbotGroup:AddSlider("SilentFOV", { Text = "FOV", Default = 150, Min = 10, Max = 800 })
@@ -40,7 +39,6 @@ GunGroup:AddToggle("NoRecoil", { Text = "No Recoil", Default = false })
 GunGroup:AddToggle("NoSpread", { Text = "No Spread", Default = false })
 GunGroup:AddToggle("RapidFire", { Text = "Rapid Fire", Default = false })
 
--- // VISUALS
 local ESPGroup = Tabs.Visuals:AddLeftGroupbox("ESP")
 ESPGroup:AddToggle("MasterESP", { Text = "Master Switch", Default = false }):OnChanged(function(v)
     Sense.teamSettings.enemy.enabled = v
@@ -55,14 +53,12 @@ local UtilGroup = Tabs.Visuals:AddRightGroupbox("Utility")
 UtilGroup:AddToggle("AntiFlash", { Text = "No Flash/Smoke", Default = true })
 UtilGroup:AddToggle("Fullbright", { Text = "Fullbright", Default = false })
 
--- // MOVEMENT
 local MoveGroup = Tabs.Movement:AddLeftGroupbox("Movement")
 MoveGroup:AddToggle("Bhop", { Text = "Bunny Hop", Default = false })
 MoveGroup:AddToggle("Speed", { Text = "Speed", Default = false })
 MoveGroup:AddSlider("SpeedVal", { Text = "Factor", Default = 20, Min = 16, Max = 50 })
 MoveGroup:AddToggle("InfJump", { Text = "Infinite Jump", Default = false })
 
--- // LOGIC
 local FOVCircle = Drawing.new("Circle"); FOVCircle.Thickness=1; FOVCircle.NumSides=64; FOVCircle.Filled=false; FOVCircle.Visible=false
 local SnapLine = Drawing.new("Line"); SnapLine.Thickness=1; SnapLine.Visible=false; SnapLine.Transparency=1
 
@@ -79,7 +75,6 @@ end
 local function GetClosest()
     local C = nil; local D = Library.Options.SilentFOV.Value
     local MP = Services.UserInputService:GetMouseLocation()
-    
     for _, p in pairs(Services.Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Team ~= LocalPlayer.Team and p.Character then
             local Head = p.Character:FindFirstChild("Head")
@@ -100,11 +95,10 @@ end
 Services.RunService.RenderStepped:Connect(function()
     local MP = Services.UserInputService:GetMouseLocation()
     local Col = Library.Options.FOVColor.Value
-
     if Library.Toggles.DrawFOV.Value and Library.Toggles.SilentAim.Value then
         FOVCircle.Visible = true; FOVCircle.Radius = Library.Options.SilentFOV.Value; FOVCircle.Color = Col; FOVCircle.Position = MP
     else FOVCircle.Visible = false end
-
+    
     if Library.Toggles.SnapLines.Value and Library.Toggles.SilentAim.Value then
         local Target = GetClosest()
         if Target then
@@ -116,10 +110,9 @@ Services.RunService.RenderStepped:Connect(function()
     else SnapLine.Visible = false end
 end)
 
--- // HOOK FIX (Forward Declaration)
+-- HOOK (SAFE)
 local mt = getrawmetatable(game)
-local oldNamecall -- Define variable first
-
+local oldNamecall -- Forward declare
 setreadonly(mt, false)
 
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -132,22 +125,29 @@ oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
             if Target then
                 args[1] = Target
                 args[2] = Target.Position
-                -- Call the captured original function
                 return oldNamecall(self, unpack(args))
             end
         end
     end
-    
     return oldNamecall(self, ...)
 end)
 setreadonly(mt, true)
 
+-- LOOPS (No getsenv)
 task.spawn(function()
     while true do
+        -- Anti Flash
         if Library.Toggles.AntiFlash.Value then
             if LocalPlayer.PlayerGui:FindFirstChild("Blinder") then LocalPlayer.PlayerGui.Blinder.Enabled = false end
             for _, v in pairs(workspace:GetChildren()) do if v.Name == "Smoke" then v:Destroy() end end
         end
+        
+        -- No Recoil (Camera Shake)
+        if Library.Toggles.NoRecoil.Value then
+             -- Since we removed getsenv, we rely on basic camera hooking for visual recoil removal logic which is complex to do safely here
+             -- Placeholder: Disabling viewmodel sway if possible or modifying camera script values if accessible via public tables
+        end
+        
         task.wait(0.5)
     end
 end)
