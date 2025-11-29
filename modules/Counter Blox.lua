@@ -30,8 +30,8 @@ local Tabs = {
 local AimbotGroup = Tabs.Combat:AddLeftGroupbox("Rage")
 AimbotGroup:AddToggle("SilentAim", { Text = "Silent Aim", Default = false })
 AimbotGroup:AddSlider("SilentFOV", { Text = "FOV", Default = 150, Min = 10, Max = 800 })
-AimbotGroup:AddToggle("DrawFOV", { Text = "Draw FOV", Default = true }):AddColorPicker("SilentColor", { Default = Color3.fromRGB(255, 0, 0) })
-AimbotGroup:AddToggle("SnapLines", { Text = "Snap Lines", Default = false, Tooltip = "Draws line to target head" })
+AimbotGroup:AddToggle("DrawFOV", { Text = "Draw FOV", Default = true }):AddColorPicker("FOVColor", { Default = Color3.fromRGB(255, 0, 0) })
+AimbotGroup:AddToggle("SnapLines", { Text = "Snap Lines", Default = false })
 AimbotGroup:AddToggle("WallCheck", { Text = "Wall Check", Default = true })
 AimbotGroup:AddSlider("HitChance", { Text = "Hit Chance", Default = 100, Min = 0, Max = 100 })
 
@@ -50,10 +50,9 @@ ESPGroup:AddToggle("ESPName", { Text = "Names", Default = true }):OnChanged(func
 ESPGroup:AddToggle("ESPHealth", { Text = "Health", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.healthBar = v end)
 ESPGroup:AddToggle("ESPTracer", { Text = "Tracers", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.tracer = v end)
 
-local UtilityGroup = Tabs.Visuals:AddRightGroupbox("Utility")
-UtilityGroup:AddToggle("AntiFlash", { Text = "No Flashbang", Default = true })
-UtilityGroup:AddToggle("AntiSmoke", { Text = "No Smoke", Default = false })
-UtilityGroup:AddToggle("Fullbright", { Text = "Fullbright", Default = false })
+local UtilGroup = Tabs.Visuals:AddRightGroupbox("Utility")
+UtilGroup:AddToggle("AntiFlash", { Text = "No Flash/Smoke", Default = true })
+UtilGroup:AddToggle("Fullbright", { Text = "Fullbright", Default = false })
 
 local MoveGroup = Tabs.Movement:AddLeftGroupbox("Movement")
 MoveGroup:AddToggle("Bhop", { Text = "Bunny Hop", Default = false })
@@ -96,46 +95,34 @@ local function GetClosest()
 end
 
 Services.RunService.RenderStepped:Connect(function()
-    -- Variables
-    local MousePos = Services.UserInputService:GetMouseLocation()
-    local SilentColor = Library.Options.SilentColor.Value
+    local MP = Services.UserInputService:GetMouseLocation()
+    local Col = Library.Options.FOVColor.Value
 
-    -- FOV
     if Library.Toggles.DrawFOV.Value and Library.Toggles.SilentAim.Value then
-        FOVCircle.Visible = true; FOVCircle.Radius = Library.Options.SilentFOV.Value
-        FOVCircle.Color = SilentColor; FOVCircle.Position = MousePos
+        FOVCircle.Visible = true; FOVCircle.Radius = Library.Options.SilentFOV.Value; FOVCircle.Color = Col; FOVCircle.Position = MP
     else FOVCircle.Visible = false end
 
-    -- Snap Lines
     if Library.Toggles.SnapLines.Value and Library.Toggles.SilentAim.Value then
         local Target = GetClosest()
         if Target then
             local Pos, Vis = Camera:WorldToViewportPoint(Target.Position)
             if Vis then
-                SnapLine.Visible = true
-                SnapLine.Color = SilentColor
-                SnapLine.From = MousePos
-                SnapLine.To = Vector2.new(Pos.X, Pos.Y)
-            else
-                SnapLine.Visible = false
-            end
-        else
-            SnapLine.Visible = false
-        end
-    else
-        SnapLine.Visible = false
-    end
+                SnapLine.Visible = true; SnapLine.Color = Col; SnapLine.From = MP; SnapLine.To = Vector2.new(Pos.X, Pos.Y)
+            else SnapLine.Visible = false end
+        else SnapLine.Visible = false end
+    else SnapLine.Visible = false end
 end)
 
+-- FIXED HOOK LOGIC
 local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
+local oldNamecall = nil 
 setreadonly(mt, false)
 
-mt.__namecall = newcclosure(function(self, ...)
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
 
-    if method == "FireServer" and self.Name == "HitPart" and Library.Toggles.SilentAim.Value then
+    if Library.Toggles.SilentAim.Value and method == "FireServer" and self.Name == "HitPart" then
         if math.random(1, 100) <= Library.Options.HitChance.Value then
             local Target = GetClosest()
             if Target then
@@ -150,30 +137,12 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 setreadonly(mt, true)
 
-local ClientEnv = getsenv(LocalPlayer.PlayerGui.Client)
-local OldIndex = mt.__index
-mt.__index = newcclosure(function(self, k)
-    if k == "CFrame" and self == Camera and Library.Toggles.NoRecoil.Value then
-    end
-    return OldIndex(self, k)
-end)
-
 task.spawn(function()
     while true do
-        if Library.Toggles.NoRecoil.Value or Library.Toggles.NoSpread.Value then
-        end
-        
         if Library.Toggles.AntiFlash.Value then
-            if LocalPlayer.PlayerGui:FindFirstChild("Blinder") then
-                LocalPlayer.PlayerGui.Blinder.Enabled = false
-            end
+            if LocalPlayer.PlayerGui:FindFirstChild("Blinder") then LocalPlayer.PlayerGui.Blinder.Enabled = false end
+            for _, v in pairs(workspace:GetChildren()) do if v.Name == "Smoke" then v:Destroy() end end
         end
-        if Library.Toggles.AntiSmoke.Value then
-            for _, v in pairs(workspace:GetChildren()) do
-                if v.Name == "Smoke" then v:Destroy() end
-            end
-        end
-        
         task.wait(0.5)
     end
 end)
@@ -182,20 +151,10 @@ Services.RunService.Stepped:Connect(function()
     if not LocalPlayer.Character then return end
     local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
     
-    if Library.Toggles.Bhop.Value and Hum then
-        if Hum.FloorMaterial == Enum.Material.Air then
-            Hum.Jump = true
-        end
-    end
-    
-    if Library.Toggles.Speed.Value and Hum then
-        Hum.WalkSpeed = Library.Options.SpeedVal.Value
-    end
-    
+    if Library.Toggles.Bhop.Value and Hum and Hum.FloorMaterial == Enum.Material.Air then Hum.Jump = true end
+    if Library.Toggles.Speed.Value and Hum then Hum.WalkSpeed = Library.Options.SpeedVal.Value end
     if Library.Toggles.Fullbright.Value then
-        Services.Lighting.Brightness = 2
-        Services.Lighting.ClockTime = 14
-        Services.Lighting.FogEnd = 100000
+        Services.Lighting.Brightness = 2; Services.Lighting.ClockTime = 14; Services.Lighting.FogEnd = 100000
     end
 end)
 
