@@ -116,13 +116,13 @@ Services.RunService.RenderStepped:Connect(function()
     else SnapLine.Visible = false end
 end)
 
--- SAFE HOOK LOGIC
+-- // HOOK FIX (Forward Declaration)
 local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
+local oldNamecall -- Define variable first
+
 setreadonly(mt, false)
 
--- Define the proxy first
-local function OnNamecall(self, ...)
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
 
@@ -132,16 +132,14 @@ local function OnNamecall(self, ...)
             if Target then
                 args[1] = Target
                 args[2] = Target.Position
+                -- Call the captured original function
                 return oldNamecall(self, unpack(args))
             end
         end
     end
-
+    
     return oldNamecall(self, ...)
-end
-
--- Apply hook
-mt.__namecall = newcclosure(OnNamecall)
+end)
 setreadonly(mt, true)
 
 task.spawn(function()
@@ -185,4 +183,4 @@ Evade.SaveManager:BuildConfigSection(Tabs.Settings)
 Evade.ThemeManager:ApplyToTab(Tabs.Settings)
 Evade.SaveManager:LoadAutoloadConfig()
 
-Library:Notify("Evade | Counter Blox (Safe) Loaded", 5)
+Library:Notify("Evade | Counter Blox Loaded", 5)
