@@ -1,3 +1,4 @@
+-- // PRE-FLIGHT
 repeat task.wait() until getgenv().Evade
 local Evade = getgenv().Evade
 
@@ -5,13 +6,15 @@ local StartTime = tick()
 repeat task.wait() until Evade.Library or (tick() - StartTime > 10)
 if not Evade.Library then warn("[Evade] Library Missing"); return end
 
+-- // IMPORTS
 local Library = Evade.Library
 local Services = Evade.Services
-local Sense = Evade.Sense
 local LocalPlayer = Evade.LocalPlayer
 local Camera = Evade.Camera
 local Vim = game:GetService("VirtualInputManager")
+local Sense = Evade.Sense
 
+-- // UI SETUP
 local Window = Library:CreateWindow({
     Title = "Evade | Blade Ball",
     Center = true, AutoShow = true, TabPadding = 8
@@ -26,11 +29,13 @@ local Tabs = {
     Settings = Window:AddTab("Settings")
 }
 
+-- // COMBAT
 local ParryGroup = Tabs.Combat:AddLeftGroupbox("Auto Parry")
 ParryGroup:AddToggle("AutoParry", { Text = "Enabled", Default = false }):AddKeyPicker("ParryKey", { Default = "C", Mode = "Toggle" })
 ParryGroup:AddToggle("SpamMode", { Text = "Spam Mode (Clash)", Default = false })
 ParryGroup:AddSlider("Distance", { Text = "Reaction Dist", Default = 20, Min = 10, Max = 100 })
 
+-- // VISUALS
 local VisGroup = Tabs.Visuals:AddLeftGroupbox("Ball ESP")
 VisGroup:AddToggle("BallESP", { Text = "Ball Highlight", Default = true })
 
@@ -45,6 +50,8 @@ ESPGroup:AddToggle("ESPName", { Text = "Names", Default = false }):OnChanged(fun
 ESPGroup:AddToggle("ESPHealth", { Text = "Health", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.healthBar = v; Sense.teamSettings.friendly.healthBar = v end)
 ESPGroup:AddToggle("ESPTracer", { Text = "Tracers", Default = false }):OnChanged(function(v) Sense.teamSettings.enemy.tracer = v; Sense.teamSettings.friendly.tracer = v end)
 
+
+-- // MOVEMENT (Standard)
 local FlightGroup = Tabs.Movement:AddLeftGroupbox("Flight System")
 FlightGroup:AddToggle("FlightEnabled", { Text = "Enable Flight", Default = false }):AddKeyPicker("FlightKey", { Default = "F", Mode = "Toggle", Text = "Toggle" })
 FlightGroup:AddDropdown("FlightMode", { Values = {"LinearVelocity", "CFrame", "BodyVelocity"}, Default = 1, Multi = false, Text = "Mode" })
@@ -60,9 +67,11 @@ MiscMove:AddToggle("InfJump", { Text = "Infinite Jump", Default = false })
 MiscMove:AddDropdown("NoclipMode", { Values = {"Collision", "CFrame"}, Default = 1, Text = "Noclip Mode" })
 MiscMove:AddToggle("Noclip", { Text = "Noclip", Default = false })
 
+-- // LOGIC
 local function Parry()
     Vim:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-    task.wait(0.01)
+    -- Short delay to register click
+    task.wait() 
     Vim:SendMouseButtonEvent(0, 0, 0, false, game, 1)
     
     if LocalPlayer.Character then
@@ -96,7 +105,9 @@ task.spawn(function()
                         if Dot > 0 and Dist <= Reach then
                             Parry()
                             if not Library.Toggles.SpamMode.Value then
-                                task.wait(0.1)
+                                -- Dynamic cooldown
+                                local CD = math.clamp(Dist/Vel, 0.05, 0.5)
+                                task.wait(CD)
                             end
                         end
                     end
@@ -196,6 +207,7 @@ Services.UserInputService.JumpRequest:Connect(function()
     end
 end)
 
+-- // SETTINGS
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); Sense.Unload() end)
 MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
