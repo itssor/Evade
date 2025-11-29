@@ -5,7 +5,7 @@
     |_______| |_____| |___|___||__|  |_______|
     
     [ EVADE.GG ] - Ultimate Script Hub
-    Version: 2.1 (Counter Blox Added)
+    Version: 2.3 (Trident Path Fix)
     Author: Itssor
     License: Open Source
 ]]
@@ -112,15 +112,15 @@ end
 local PlaceID = game.PlaceId
 local Module  = "Universal" 
 
--- ID Database
+-- ID Database (Keys = Filenames in /modules/)
 local Games = {
-    Arsenal       = {286090429, 286090429},
-    FNTD2         = {80550384527033, 14816132646},
-    MM2           = {142823291, 335132309},
-    Pressure      = {12552538295},
-    Doors         = {6839171747, 6516141723},
-    AR2           = {863266079, 2376885433},
-    CounterBlox   = {301549746} -- Added Counter Blox
+    ["Arsenal"]         = {286090429, 286090429},
+    ["FNTD2"]           = {80550384527033, 14816132646},
+    ["MM2"]             = {142823291, 335132309},
+    ["Pressure"]        = {12552538295},
+    ["Doors"]           = {6839171747, 6516141723},
+    ["Counter Blox"]    = {301549746},
+    ["TridentSurvival"] = {5796006927} -- Explicitly named per your request
 }
 
 for Name, IDs in pairs(Games) do
@@ -134,7 +134,6 @@ end
 
 -- Fallback: Name Check
 if Module == "Universal" then
-    print("[Evade] ID Check returned Universal. Scanning Name...")
     local Success, Info = pcall(function()
         return game:GetService("MarketplaceService"):GetProductInfo(PlaceID)
     end)
@@ -148,8 +147,8 @@ if Module == "Universal" then
         elseif string.find(Name, "murder mystery") or string.find(Name, "mm2") then Module = "MM2"
         elseif string.find(Name, "pressure") then Module = "Pressure"
         elseif string.find(Name, "doors") then Module = "Doors"
-        elseif string.find(Name, "apoc") or string.find(Name, "ar2") then Module = "AR2"
-        elseif string.find(Name, "counter blox") or string.find(Name, "cbro") then Module = "CounterBlox"
+        elseif string.find(Name, "counter blox") or string.find(Name, "cbro") then Module = "Counter Blox"
+        elseif string.find(Name, "trident") then Module = "TridentSurvival" -- Matches Name to File
         end
     else
         warn("[Evade] Failed to fetch Game Name.")
@@ -161,7 +160,12 @@ Notify("Evade.GG", "Game Detected: " .. Module, 5)
 print("----------------------------------------")
 print("[Evade] Target Module: " .. Module)
 
-local ModuleURL = Config.RepoURL .. Config.Folder .. Module .. ".lua"
+-- Auto-Encode Spaces for URL
+local SafeModuleName = Module:gsub(" ", "%%20")
+local ModuleURL = Config.RepoURL .. Config.Folder .. SafeModuleName .. ".lua"
+
+print("[Evade] Fetching: " .. ModuleURL)
+
 local Success, Err = pcall(function()
     loadstring(game:HttpGet(ModuleURL))()
 end)
