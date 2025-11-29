@@ -11,6 +11,7 @@ local Sense = Evade.Sense
 local LocalPlayer = Evade.LocalPlayer
 local Camera = Evade.Camera
 local Mouse = Evade.Mouse
+local ReplicatedStorage = Services.ReplicatedStorage
 
 local Window = Library:CreateWindow({
     Title = "Evade | Counter Blox",
@@ -26,7 +27,6 @@ local Tabs = {
     Settings = Window:AddTab("Settings")
 }
 
--- // COMBAT
 local AimbotGroup = Tabs.Combat:AddLeftGroupbox("Rage")
 AimbotGroup:AddToggle("SilentAim", { Text = "Silent Aim", Default = false })
 AimbotGroup:AddSlider("SilentFOV", { Text = "FOV", Default = 150, Min = 10, Max = 800 })
@@ -38,8 +38,8 @@ AimbotGroup:AddSlider("HitChance", { Text = "Hit Chance", Default = 100, Min = 0
 local GunGroup = Tabs.Combat:AddRightGroupbox("Gun Mods")
 GunGroup:AddToggle("NoRecoil", { Text = "No Recoil", Default = false })
 GunGroup:AddToggle("NoSpread", { Text = "No Spread", Default = false })
+GunGroup:AddToggle("RapidFire", { Text = "Rapid Fire", Default = false })
 
--- // VISUALS
 local ESPGroup = Tabs.Visuals:AddLeftGroupbox("ESP")
 ESPGroup:AddToggle("MasterESP", { Text = "Master Switch", Default = false }):OnChanged(function(v)
     Sense.teamSettings.enemy.enabled = v
@@ -54,14 +54,12 @@ local UtilGroup = Tabs.Visuals:AddRightGroupbox("Utility")
 UtilGroup:AddToggle("AntiFlash", { Text = "No Flash/Smoke", Default = true })
 UtilGroup:AddToggle("Fullbright", { Text = "Fullbright", Default = false })
 
--- // MOVEMENT
 local MoveGroup = Tabs.Movement:AddLeftGroupbox("Movement")
 MoveGroup:AddToggle("Bhop", { Text = "Bunny Hop", Default = false })
 MoveGroup:AddToggle("Speed", { Text = "Speed", Default = false })
 MoveGroup:AddSlider("SpeedVal", { Text = "Factor", Default = 20, Min = 16, Max = 50 })
 MoveGroup:AddToggle("InfJump", { Text = "Infinite Jump", Default = false })
 
--- // LOGIC
 local FOVCircle = Drawing.new("Circle"); FOVCircle.Thickness=1; FOVCircle.NumSides=64; FOVCircle.Filled=false; FOVCircle.Visible=false
 local SnapLine = Drawing.new("Line"); SnapLine.Thickness=1; SnapLine.Visible=false; SnapLine.Transparency=1
 
@@ -105,11 +103,11 @@ Services.RunService.RenderStepped:Connect(function()
     else FOVCircle.Visible = false end
 
     if Library.Toggles.SnapLines.Value and Library.Toggles.SilentAim.Value then
-        local T = GetClosest()
-        if T then
-            local P, V = Camera:WorldToViewportPoint(T.Position)
-            if V then
-                SnapLine.Visible = true; SnapLine.Color = Col; SnapLine.From = MP; SnapLine.To = Vector2.new(P.X, P.Y)
+        local Target = GetClosest()
+        if Target then
+            local Pos, Vis = Camera:WorldToViewportPoint(Target.Position)
+            if Vis then
+                SnapLine.Visible = true; SnapLine.Color = Col; SnapLine.From = MP; SnapLine.To = Vector2.new(Pos.X, Pos.Y)
             else SnapLine.Visible = false end
         else SnapLine.Visible = false end
     else SnapLine.Visible = false end
@@ -117,10 +115,10 @@ end)
 
 -- FIXED HOOK LOGIC
 local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
+local oldNamecall = nil 
 setreadonly(mt, false)
 
-mt.__namecall = newcclosure(function(self, ...)
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
 
@@ -130,10 +128,7 @@ mt.__namecall = newcclosure(function(self, ...)
             if Target then
                 args[1] = Target
                 args[2] = Target.Position
-                -- Safe call to original
-                if oldNamecall then
-                    return oldNamecall(self, unpack(args))
-                end
+                return oldNamecall(self, unpack(args))
             end
         end
     end
@@ -142,10 +137,8 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 setreadonly(mt, true)
 
--- GUN MODS & UTILITY
 task.spawn(function()
     while true do
-        -- Anti Flash/Smoke
         if Library.Toggles.AntiFlash.Value then
             if LocalPlayer.PlayerGui:FindFirstChild("Blinder") then LocalPlayer.PlayerGui.Blinder.Enabled = false end
             for _, v in pairs(workspace:GetChildren()) do if v.Name == "Smoke" then v:Destroy() end end
@@ -154,14 +147,12 @@ task.spawn(function()
     end
 end)
 
--- MOVEMENT LOOP
 Services.RunService.Stepped:Connect(function()
     if not LocalPlayer.Character then return end
     local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
     
     if Library.Toggles.Bhop.Value and Hum and Hum.FloorMaterial == Enum.Material.Air then Hum.Jump = true end
     if Library.Toggles.Speed.Value and Hum then Hum.WalkSpeed = Library.Options.SpeedVal.Value end
-    
     if Library.Toggles.Fullbright.Value then
         Services.Lighting.Brightness = 2; Services.Lighting.ClockTime = 14; Services.Lighting.FogEnd = 100000
     end
@@ -173,7 +164,6 @@ Services.UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- // SETTINGS
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); Sense.Unload() end)
 MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
