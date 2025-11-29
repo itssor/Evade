@@ -116,31 +116,55 @@ Services.RunService.RenderStepped:Connect(function()
     else SnapLine.Visible = false end
 end)
 
--- // THE MANUAL HOOK (The Fix)
-local mt = getrawmetatable(game)
-local backup_namecall = mt.__namecall -- Manual Backup
-setreadonly(mt, false)
+-- // THE HYBRID HOOK
+local oldNamecall
+local success = pcall(function()
+    -- Attempt standard hookmetamethod
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
 
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-
-    if method == "FireServer" and self.Name == "HitPart" and Library.Toggles.SilentAim.Value then
-        if math.random(1, 100) <= Library.Options.HitChance.Value then
-            local Target = GetClosest()
-            if Target then
-                args[1] = Target
-                args[2] = Target.Position
-                -- Use the manually backed up function
-                return backup_namecall(self, unpack(args))
+        if Library.Toggles.SilentAim.Value and not checkcaller() and method == "FireServer" and self.Name == "HitPart" then
+            if math.random(1, 100) <= Library.Options.HitChance.Value then
+                local Target = GetClosest()
+                if Target then
+                    args[1] = Target
+                    args[2] = Target.Position
+                    return oldNamecall(self, unpack(args))
+                end
             end
         end
-    end
-    
-    return backup_namecall(self, ...)
+        return oldNamecall(self, ...)
+    end)
 end)
-setreadonly(mt, true)
 
+-- Fallback if hookmetamethod failed or returned nil
+if not success or not oldNamecall then
+    warn("[Evade] hookmetamethod failed or nil, switching to getrawmetatable")
+    local mt = getrawmetatable(game)
+    oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+
+        if Library.Toggles.SilentAim.Value and not checkcaller() and method == "FireServer" and self.Name == "HitPart" then
+            if math.random(1, 100) <= Library.Options.HitChance.Value then
+                local Target = GetClosest()
+                if Target then
+                    args[1] = Target
+                    args[2] = Target.Position
+                    return oldNamecall(self, unpack(args))
+                end
+            end
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(mt, true)
+end
+
+-- LOOPS
 task.spawn(function()
     while true do
         if Library.Toggles.AntiFlash.Value then
@@ -168,6 +192,7 @@ Services.UserInputService.JumpRequest:Connect(function()
     end
 end)
 
+-- // SETTINGS
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); Sense.Unload() end)
 MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
@@ -182,4 +207,4 @@ Evade.SaveManager:BuildConfigSection(Tabs.Settings)
 Evade.ThemeManager:ApplyToTab(Tabs.Settings)
 Evade.SaveManager:LoadAutoloadConfig()
 
-Library:Notify("Evade | Counter Blox (Manual Hook) Loaded", 5)
+Library:Notify("Evade | Counter Blox (Hybrid) Loaded", 5)
