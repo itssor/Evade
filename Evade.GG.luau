@@ -5,7 +5,7 @@
     |_______| |_____| |___|___||__|  |_______|
     
     [ EVADE.GG ] - Ultimate Script Hub
-    Version: 1.9 (Smart Name Detection)
+    Version: 1.95 (Fisch & All Modules)
     Author: Itssor
     License: Open Source
 ]]
@@ -98,6 +98,7 @@ if not getgenv().Evade.Library or not getgenv().Evade.Sense then
     return
 end
 
+-- Patch ESP Interface
 if not getgenv().Evade.Sense.EspInterface then
     getgenv().Evade.Sense.EspInterface = {
         getCharacter = function(Player) return Player.Character end,
@@ -112,7 +113,6 @@ end
 local PlaceID = game.PlaceId
 local Module  = "Universal" 
 
--- Method 1: Exact ID Match (Fastest)
 local Games = {
     Arsenal       = {286090429, 286090429},
     FNTD2         = {80550384527033, 14816132646},
@@ -120,9 +120,11 @@ local Games = {
     Pressure      = {12552538295},
     TSB           = {10449761463},
     BladeBall     = {13772394625},
-    Doors         = {6839171747, 6516141723}
+    Doors         = {6839171747, 6516141723},
+    Fisch         = {16732694052}
 }
 
+-- ID Check
 for Name, IDs in pairs(Games) do
     for _, ID in pairs(IDs) do
         if PlaceID == ID then
@@ -132,9 +134,8 @@ for Name, IDs in pairs(Games) do
     end
 end
 
--- Method 2: Name Detection (Fallback)
+-- Fallback: Name Check (Smart Detection)
 if Module == "Universal" then
-    print("[Evade] ID Check failed. Scanning Game Name...")
     local Success, Info = pcall(function()
         return game:GetService("MarketplaceService"):GetProductInfo(PlaceID)
     end)
@@ -148,6 +149,7 @@ if Module == "Universal" then
         elseif string.find(Name, "strongest battlegrounds") or string.find(Name, "tsb") then Module = "TSB"
         elseif string.find(Name, "blade ball") then Module = "BladeBall"
         elseif string.find(Name, "doors") then Module = "Doors"
+        elseif string.find(Name, "fisch") then Module = "Fisch"
         end
     end
 end
