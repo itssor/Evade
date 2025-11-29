@@ -16,7 +16,7 @@ local Mouse = Evade.Mouse
 
 -- // UI SETUP
 local Window = Library:CreateWindow({
-    Title = "Evade | Universal (v2.0)",
+    Title = "Evade | Universal",
     Center = true, AutoShow = true, TabPadding = 8
 })
 
