@@ -5,7 +5,7 @@
     |_______| |_____| |___|___||__|  |_______|
     
     [ EVADE.GG ] - Ultimate Script Hub
-    Version: 2.0 (AR2 Support Added)
+    Version: 2.1 (Robust Name Scanner)
     Author: Itssor
     License: Open Source
 ]]
@@ -112,13 +112,14 @@ end
 local PlaceID = game.PlaceId
 local Module  = "Universal" 
 
+-- Priority: Exact ID Match
 local Games = {
     Arsenal       = {286090429, 286090429},
     FNTD2         = {80550384527033, 14816132646},
     MM2           = {142823291, 335132309},
     Pressure      = {12552538295},
     Doors         = {6839171747, 6516141723},
-    AR2           = {863266079, 2376885433, 2376885433} -- Apocalypse Rising 2
+    AR2           = {863266079, 2376885433}
 }
 
 for Name, IDs in pairs(Games) do
@@ -130,21 +131,27 @@ for Name, IDs in pairs(Games) do
     end
 end
 
--- Fallback: Name Check
+-- Fallback: Smart Name Detection
 if Module == "Universal" then
+    print("[Evade] ID Check returned Universal. Scanning Name...")
     local Success, Info = pcall(function()
         return game:GetService("MarketplaceService"):GetProductInfo(PlaceID)
     end)
     
     if Success and Info and Info.Name then
         local Name = string.lower(Info.Name)
+        print("[Evade] Detected Name: " .. Name)
+        
+        -- Fuzzy Matching
         if string.find(Name, "arsenal") then Module = "Arsenal"
         elseif string.find(Name, "five nights td") or string.find(Name, "fntd") then Module = "FNTD2"
-        elseif string.find(Name, "murder mystery 2") or string.find(Name, "mm2") then Module = "MM2"
+        elseif string.find(Name, "murder mystery") or string.find(Name, "mm2") then Module = "MM2"
         elseif string.find(Name, "pressure") then Module = "Pressure"
         elseif string.find(Name, "doors") then Module = "Doors"
-        elseif string.find(Name, "apocalypse rising") or string.find(Name, "ar2") then Module = "AR2"
+        elseif string.find(Name, "apoc") or string.find(Name, "ar2") or string.find(Name, "rising") then Module = "AR2"
         end
+    else
+        warn("[Evade] Failed to fetch Game Name.")
     end
 end
 
@@ -176,4 +183,3 @@ if not Success then
     end
 end
 print("----------------------------------------")
--- Wsg sigma
