@@ -5,7 +5,7 @@
     |_______| |_____| |___|___||__|  |_______|
     
     [ EVADE.GG ] - Ultimate Script Hub
-    Version: 1.9.5 (Fisch Fix + Trimmed)
+    Version: 2.0 (AR2 Support Added)
     Author: Itssor
     License: Open Source
 ]]
@@ -112,18 +112,13 @@ end
 local PlaceID = game.PlaceId
 local Module  = "Universal" 
 
--- DEBUG INFO
-print("----------------------------------------")
-print("[Evade] Current Place ID: " .. PlaceID)
-
--- A. ID CHECK
 local Games = {
     Arsenal       = {286090429, 286090429},
     FNTD2         = {80550384527033, 14816132646},
     MM2           = {142823291, 335132309},
     Pressure      = {12552538295},
     Doors         = {6839171747, 6516141723},
-    Fisch         = {16732694052, 18336484522} -- Added common sub-place for Fisch
+    AR2           = {863266079, 2376885433, 2376885433} -- Apocalypse Rising 2
 }
 
 for Name, IDs in pairs(Games) do
@@ -135,33 +130,28 @@ for Name, IDs in pairs(Games) do
     end
 end
 
--- B. NAME CHECK (Fallback)
+-- Fallback: Name Check
 if Module == "Universal" then
-    print("[Evade] ID Check returned Universal. Scanning Name...")
     local Success, Info = pcall(function()
         return game:GetService("MarketplaceService"):GetProductInfo(PlaceID)
     end)
     
     if Success and Info and Info.Name then
         local Name = string.lower(Info.Name)
-        print("[Evade] Detected Name: " .. Name)
-        
         if string.find(Name, "arsenal") then Module = "Arsenal"
         elseif string.find(Name, "five nights td") or string.find(Name, "fntd") then Module = "FNTD2"
         elseif string.find(Name, "murder mystery 2") or string.find(Name, "mm2") then Module = "MM2"
         elseif string.find(Name, "pressure") then Module = "Pressure"
         elseif string.find(Name, "doors") then Module = "Doors"
-        elseif string.find(Name, "fisch") then Module = "Fisch"
+        elseif string.find(Name, "apocalypse rising") or string.find(Name, "ar2") then Module = "AR2"
         end
-    else
-        warn("[Evade] Failed to fetch Game Name.")
     end
 end
 
 -- // 6. MODULE EXECUTION
 Notify("Evade.GG", "Game Detected: " .. Module, 5)
-print("[Evade] Loading Module: " .. Module)
 print("----------------------------------------")
+print("[Evade] Target Module: " .. Module)
 
 local ModuleURL = Config.RepoURL .. Config.Folder .. Module .. ".lua"
 local Success, Err = pcall(function()
@@ -185,3 +175,4 @@ if not Success then
         warn("[Evade] Fatal Error: " .. tostring(UnivErr))
     end
 end
+print("----------------------------------------")
