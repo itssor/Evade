@@ -1,8 +1,8 @@
+-- [[ EVADE.GG | UNIVERSAL MODULE (PATCHED) ]]
 local Evade = getgenv().Evade
 if not Evade then return end
 
 local Library = Evade.Library
-local Window = Evade.Window
 local Services = Evade.Services
 local Sense = Evade.Sense
 local LocalPlayer = Evade.LocalPlayer
@@ -14,8 +14,18 @@ local HasMouseMove = (mousemoverel ~= nil)
 local HasHooks = (getrawmetatable ~= nil) and (setreadonly ~= nil)
 local HasDrawing = (Drawing ~= nil)
 
--- // UI SETUP
+-- // UI RECOVERY
+-- If Loader didn't pass the Window, we make one.
 local Window = Evade.Window
+if not Window then
+    warn("[Evade] Window not found in API. Creating fallback.")
+    Window = Library:CreateWindow({
+        Title = "Evade | Universal (Fallback)",
+        Center = true, AutoShow = true, TabPadding = 8
+    })
+    Evade.Window = Window -- Repair the API
+end
+
 local Tabs = {
     Combat = Window:AddTab("Combat"),
     Visuals = Window:AddTab("Visuals"),
@@ -147,10 +157,10 @@ local function GetClosestPlayer()
         if Plr ~= LocalPlayer then
             -- Safe Sense Check
             local Char = (Sense and Sense.EspInterface and Sense.EspInterface.getCharacter(Plr)) or Plr.Character
+            
             if Char then
                 if Library.Toggles.TeamCheck.Value and Plr.Team == LocalPlayer.Team then continue end
                 
-                -- Check for various target parts
                 local Target = Char:FindFirstChild(Library.Options.TargetPart.Value)
                 if Target then
                      if not Library.Toggles.WallCheck.Value or IsVisible(Target) then
@@ -170,7 +180,7 @@ local function GetClosestPlayer()
     return Closest
 end
 
--- // SILENT AIM HOOK
+-- // SILENT AIM HOOK (CONDITIONAL)
 if HasHooks then
     local mt = getrawmetatable(game)
     local oldNamecall = mt.__namecall
@@ -196,7 +206,7 @@ if HasHooks then
     setreadonly(mt, true)
 end
 
--- // RENDER LOOP (Visuals, Aimbot, Hitbox)
+-- // RENDER LOOP
 local FOVCircle = nil
 if HasDrawing then FOVCircle = Drawing.new("Circle"); FOVCircle.Thickness=1; FOVCircle.NumSides=64; FOVCircle.Filled=false; FOVCircle.Visible=false end
 local Skeletons = {}
@@ -206,9 +216,13 @@ Services.RunService.RenderStepped:Connect(function()
     -- FOV Update
     if FOVCircle then
         if Library.Toggles.DrawFOV.Value and Library.Toggles.AimbotEnabled.Value then
-            FOVCircle.Visible = true; FOVCircle.Radius = Library.Options.FOVRadius.Value
-            FOVCircle.Color = Library.Options.FOVColor.Value; FOVCircle.Position = Services.UserInputService:GetMouseLocation()
-        else FOVCircle.Visible = false end
+            FOVCircle.Visible = true
+            FOVCircle.Radius = Library.Options.FOVRadius.Value
+            FOVCircle.Color = Library.Options.FOVColor.Value
+            FOVCircle.Position = Services.UserInputService:GetMouseLocation()
+        else
+            FOVCircle.Visible = false
+        end
     end
 
     -- Hitbox Expander (The CB Logic)
@@ -218,7 +232,6 @@ Services.RunService.RenderStepped:Connect(function()
         for _, v in pairs(Services.Players:GetPlayers()) do
             if v ~= LocalPlayer and v.Team ~= LocalPlayer.Team and v.Character then
                 pcall(function()
-                    -- Checks for HeadHB (Counter Blox style) and standard parts
                     for _, PartName in pairs({"HeadHB", "Head", "HumanoidRootPart", "Torso", "UpperTorso"}) do
                         local Part = v.Character:FindFirstChild(PartName)
                         if Part then Part.CanCollide = false; Part.Size = Vector3.new(Size, Size, Size); Part.Transparency = Trans end
@@ -273,7 +286,7 @@ Services.RunService.RenderStepped:Connect(function()
             end
         end
     end
-
+    
     -- Chams
     if Library.Toggles.ESPChams.Value then
         for _, p in pairs(Services.Players:GetPlayers()) do
@@ -288,6 +301,11 @@ Services.RunService.RenderStepped:Connect(function()
         for _, p in pairs(Services.Players:GetPlayers()) do
             if p.Character and p.Character:FindFirstChild("EvadeCham") then p.Character.EvadeCham:Destroy() end
         end
+    end
+
+    -- Fullbright
+    if Library.Toggles.Fullbright.Value then
+        Services.Lighting.Brightness = 2; Services.Lighting.ClockTime = 14; Services.Lighting.FogEnd = 100000
     end
 end)
 
