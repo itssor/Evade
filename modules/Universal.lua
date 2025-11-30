@@ -1,32 +1,43 @@
--- [[ EVADE.GG | UNIVERSAL MODULE (STABLE + FALLBACK) ]]
+-- [[ EVADE.GG | UNIVERSAL MODULE (SELF-RELIANT) ]]
 local Evade = getgenv().Evade
-if not Evade then return end
+if not Evade then 
+    warn("[Evade] Core API missing! Loading fallback environment...")
+    -- Fallback for standalone execution debugging
+    local Repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+    Evade = {
+        Library = loadstring(game:HttpGet(Repo .. 'Library.lua'))(),
+        Services = {
+            Players = game:GetService("Players"),
+            RunService = game:GetService("RunService"),
+            Workspace = game:GetService("Workspace"),
+            UserInputService = game:GetService("UserInputService"),
+            VirtualUser = game:GetService("VirtualUser")
+        },
+        LocalPlayer = game:GetService("Players").LocalPlayer
+    }
+    getgenv().Evade = Evade
+end
 
 local Library = Evade.Library
 local Services = Evade.Services
-local Sense = Evade.Sense
 local LocalPlayer = Evade.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
--- // COMPATIBILITY CHECKS
-local HasMouseMove = (mousemoverel ~= nil)
-local HasHooks = (getrawmetatable ~= nil) and (setreadonly ~= nil)
-local HasDrawing = (Drawing ~= nil)
-
--- // UI RECOVERY (THE FIX)
--- If the Loader failed to pass the Window, we create a fallback here.
+-- // UI INITIALIZATION (The Crash Fix)
 local Window = Evade.Window
-if not Window then
-    warn("[Evade] Window missing. Initializing Fallback UI.")
+
+-- Force create if missing OR invalid
+if not Window or typeof(Window) ~= "table" then
+    warn("[Evade] Window instance invalid. Creating new UI.")
     Window = Library:CreateWindow({
-        Title = "Evade | Universal (Recovered)",
+        Title = "Evade | Universal",
         Center = true, AutoShow = true, TabPadding = 8
     })
-    Evade.Window = Window -- Repair the API
+    Evade.Window = Window -- Repair Global API
 end
 
--- // UI SETUP
+-- // TABS
 local Tabs = {
     Combat = Window:AddTab("Combat"),
     Visuals = Window:AddTab("Visuals"),
@@ -34,6 +45,14 @@ local Tabs = {
     Utility = Window:AddTab("Utility"),
     Settings = Window:AddTab("Settings")
 }
+
+-- Export Tabs to API
+Evade.Tabs = Tabs 
+
+-- // COMPATIBILITY CHECKS
+local HasMouseMove = (mousemoverel ~= nil)
+local HasHooks = (getrawmetatable ~= nil) and (setreadonly ~= nil)
+local HasDrawing = (Drawing ~= nil)
 
 -- // 1. COMBAT TAB
 local AimbotGroup = Tabs.Combat:AddLeftGroupbox("Aimbot Engine")
@@ -69,17 +88,26 @@ FovGroup:AddSlider("FOVRadius", { Text = "Radius", Default = 100, Min = 10, Max 
 
 -- // 2. VISUALS TAB
 local ESPGroup = Tabs.Visuals:AddLeftGroupbox("Sense ESP")
-ESPGroup:AddToggle("MasterESP", { Text = "Master Switch", Default = false }):OnChanged(function(v)
-    if Sense and Sense.teamSettings then
-        Sense.teamSettings.enemy.enabled = v
-        Sense.teamSettings.friendly.enabled = v
-        Sense.Load()
-    end
-end)
-ESPGroup:AddToggle("ESPBox", { Text = "Boxes", Default = false }):OnChanged(function(v) if Sense then Sense.teamSettings.enemy.box = v; Sense.teamSettings.friendly.box = v end end)
-ESPGroup:AddToggle("ESPName", { Text = "Names", Default = false }):OnChanged(function(v) if Sense then Sense.teamSettings.enemy.name = v; Sense.teamSettings.friendly.name = v end end)
-ESPGroup:AddToggle("ESPHealth", { Text = "Health", Default = false }):OnChanged(function(v) if Sense then Sense.teamSettings.enemy.healthBar = v; Sense.teamSettings.friendly.healthBar = v end end)
-ESPGroup:AddToggle("ESPTracer", { Text = "Tracers", Default = false }):OnChanged(function(v) if Sense then Sense.teamSettings.enemy.tracer = v; Sense.teamSettings.friendly.tracer = v end end)
+-- Safe Sense Loading
+local Sense = Evade.Sense or {} 
+local SenseAvailable = (Sense.Load ~= nil)
+
+if SenseAvailable then
+    ESPGroup:AddToggle("MasterESP", { Text = "Master Switch", Default = false }):OnChanged(function(v)
+        if Sense.teamSettings then
+            Sense.teamSettings.enemy.enabled = v
+            Sense.teamSettings.friendly.enabled = v
+            Sense.Load()
+        end
+    end)
+    ESPGroup:AddToggle("ESPBox", { Text = "Boxes", Default = false }):OnChanged(function(v) if Sense.teamSettings then Sense.teamSettings.enemy.box = v; Sense.teamSettings.friendly.box = v end end)
+    ESPGroup:AddToggle("ESPName", { Text = "Names", Default = false }):OnChanged(function(v) if Sense.teamSettings then Sense.teamSettings.enemy.name = v; Sense.teamSettings.friendly.name = v end end)
+    ESPGroup:AddToggle("ESPHealth", { Text = "Health", Default = false }):OnChanged(function(v) if Sense.teamSettings then Sense.teamSettings.enemy.healthBar = v; Sense.teamSettings.friendly.healthBar = v end end)
+    ESPGroup:AddToggle("ESPTracer", { Text = "Tracers", Default = false }):OnChanged(function(v) if Sense.teamSettings then Sense.teamSettings.enemy.tracer = v; Sense.teamSettings.friendly.tracer = v end end)
+else
+    ESPGroup:AddLabel("Sense ESP Library Failed to Load")
+end
+
 ESPGroup:AddToggle("ESPChams", { Text = "Chams (Highlight)", Default = false })
 ESPGroup:AddToggle("ESPSkeleton", { Text = "Skeleton ESP", Default = false })
 
@@ -157,7 +185,7 @@ local function GetClosestPlayer()
     for _, Plr in pairs(Services.Players:GetPlayers()) do
         if Plr ~= LocalPlayer then
             -- Safe Sense Check
-            local Char = (Sense and Sense.EspInterface and Sense.EspInterface.getCharacter(Plr)) or Plr.Character
+            local Char = (SenseAvailable and Sense.EspInterface and Sense.EspInterface.getCharacter(Plr)) or Plr.Character
             
             if Char then
                 if Library.Toggles.TeamCheck.Value and Plr.Team == LocalPlayer.Team then continue end
@@ -226,7 +254,7 @@ Services.RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Hitbox Expander
+    -- Hitbox Expander (CB Logic)
     if Library.Toggles.UniHitbox.Value then
         local Size = Library.Options.HitboxSize.Value
         local Trans = Library.Toggles.HitboxVis.Value and 0.5 or 1
@@ -242,7 +270,7 @@ Services.RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Aimbot
+    -- Aimbot Execution
     if Library.Toggles.AimbotEnabled.Value and Library.Options.AimbotKey:GetState() then
         if not (Library.Toggles.StickyAim.Value and LockedTarget) then LockedTarget = GetClosestPlayer() end
         if LockedTarget then
@@ -333,11 +361,13 @@ Services.RunService.Stepped:Connect(function()
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
 
+    -- Click TP
     if Library.Toggles.ClickTP.Value and Services.UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) and HRP then
         local MousePos = Mouse.Hit.p
         HRP.CFrame = CFrame.new(MousePos + Vector3.new(0, 3, 0)); task.wait(0.1)
     end
 
+    -- Spider
     if Library.Toggles.Spider.Value and HRP then
         local Ray = Ray.new(HRP.Position, HRP.CFrame.LookVector * 2)
         local Part = workspace:FindPartOnRay(Ray, LocalPlayer.Character)
@@ -346,10 +376,13 @@ Services.RunService.Stepped:Connect(function()
         end
     end
 
+    -- Bhop
     if Library.Toggles.Bhop.Value and Hum and Hum.FloorMaterial ~= Enum.Material.Air then Hum:ChangeState("Jumping") end
     
+    -- Spinbot
     if Library.Toggles.SpinBot.Value and HRP then HRP.CFrame = HRP.CFrame * CFrame.Angles(0, math.rad(Library.Options.SpinSpeed.Value), 0) end
     
+    -- Flight & Speed
     if Library.Toggles.FlightEnabled.Value and Library.Options.FlightKey:GetState() and HRP then
         local Mode = Library.Options.FlightMode.Value
         local Speed = Library.Options.FlightSpeed.Value
@@ -394,19 +427,23 @@ end)
 
 -- // SETTINGS
 local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
-MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); Sense.Unload() end)
+MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); if Sense then Sense.Unload() end end)
 MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
 
 Library.ToggleKeybind = Library.Options.MenuKey
 
-Evade.ThemeManager:SetLibrary(Library)
-Evade.SaveManager:SetLibrary(Library)
-Evade.SaveManager:IgnoreThemeSettings()
-Evade.SaveManager:SetIgnoreIndexes({"MenuKey"})
-Evade.SaveManager:SetFolder("Evade")
-Evade.SaveManager:SetFolder("Evade/Universal")
-Evade.SaveManager:BuildConfigSection(Tabs.Settings)
-Evade.ThemeManager:ApplyToTab(Tabs.Settings)
-Evade.SaveManager:LoadAutoloadConfig()
+-- Themes
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({"MenuKey"})
+SaveManager:SetFolder("Evade")
+SaveManager:SetFolder("Evade/Universal")
+SaveManager:BuildConfigSection(Tabs.Settings)
+ThemeManager:ApplyToTab(Tabs.Settings)
+SaveManager:LoadAutoloadConfig()
 
 Library:Notify("Evade | Universal Loaded", 5)
