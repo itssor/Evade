@@ -1,20 +1,15 @@
 --[[
-    _______ __   __ _______ ______  _______
-    |    ___||  |_|  ||   _   ||   _  \|    ___|
-    |    ___||       ||       ||  | \  |    ___|
-    |_______| |_____| |___|___||__|  |_______|
-    
-    [ EVADE.GG ] - Ultimate Script Hub
-    Version: 2.0 (AR2 Support Added)
-    Author: Itssor
-    License: Open Source
+    EVADE.GG - MASTER LOADER
+    Version: 3.0 (Modular + Detection)
+    Repository: https://github.com/itssor/Evade
+    Author: Pine (Cell Block D)
 ]]
 
--- // 0. INITIALIZATION CHECK
+-- // 0. SINGLETON CHECK
 if getgenv().EvadeLoaded then
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Evade.GG",
-        Text = "Script is already active!",
+        Text = "Script is already running!",
         Duration = 5
     })
     return
@@ -22,84 +17,36 @@ end
 getgenv().EvadeLoaded = true
 
 -- // 1. CONFIGURATION
-local Config = {
-    RepoURL = "https://raw.githubusercontent.com/itssor/Evade/main/",
-    Folder  = "modules/", 
+local Repo = "https://raw.githubusercontent.com/itssor/Evade/main/Modules/"
 
-    Libraries = {
-        Obsidian = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/",
-        Sense    = "https://raw.githubusercontent.com/jensonhirst/Sirius/request/library/sense/source.lua"
-    }
+-- // 2. SERVICES
+local Services = {
+    Players = game:GetService("Players"),
+    RunService = game:GetService("RunService"),
+    Workspace = game:GetService("Workspace"),
+    ReplicatedStorage = game:GetService("ReplicatedStorage"),
+    UserInputService = game:GetService("UserInputService"),
+    VirtualUser = game:GetService("VirtualUser"),
+    TeleportService = game:GetService("TeleportService"),
+    HttpService = game:GetService("HttpService"),
+    MarketplaceService = game:GetService("MarketplaceService")
 }
 
--- // 2. GLOBAL ENVIRONMENT SETUP
-getgenv().Evade = {
-    Services = {
-        Players           = game:GetService("Players"),
-        RunService        = game:GetService("RunService"),
-        Workspace         = game:GetService("Workspace"),
-        ReplicatedStorage = game:GetService("ReplicatedStorage"),
-        UserInputService  = game:GetService("UserInputService"),
-        VirtualUser       = game:GetService("VirtualUser"),
-        Lighting          = game:GetService("Lighting"),
-        HttpService       = game:GetService("HttpService"),
-        TeleportService   = game:GetService("TeleportService"),
-        CollectionService = game:GetService("CollectionService"),
-        MarketplaceService= game:GetService("MarketplaceService")
-    },
-    LocalPlayer = game:GetService("Players").LocalPlayer,
-    Camera      = game:GetService("Workspace").CurrentCamera,
-    Mouse       = game:GetService("Players").LocalPlayer:GetMouse()
-}
+local LocalPlayer = Services.Players.LocalPlayer
+local Camera = Services.Workspace.CurrentCamera
 
--- // 3. UTILITY FUNCTIONS
-local function SafeLoad(Url, DebugName)
-    local Success, Result = pcall(function() return game:HttpGet(Url) end)
-    if not Success then 
-        warn("[Evade] Failed to download: " .. DebugName)
-        return nil 
-    end
+-- // 3. LOAD CORE LIBRARIES
+-- UI Library (Obsidian)
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
 
-    local Func, SyntaxErr = loadstring(Result)
-    if not Func then 
-        warn("[Evade] Syntax Error in " .. DebugName .. ": " .. tostring(SyntaxErr))
-        return nil 
-    end
+-- ESP Library (Sense)
+local Sense = loadstring(game:HttpGet("https://raw.githubusercontent.com/jensonhirst/Sirius/request/library/sense/source.lua"))()
 
-    local RunSuccess, RunResult = pcall(Func)
-    if not RunSuccess then 
-        warn("[Evade] Runtime Error in " .. DebugName .. ": " .. tostring(RunResult))
-        return nil 
-    end
-
-    return RunResult
-end
-
-local function Notify(Title, Text, Duration)
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = Title,
-        Text = Text,
-        Duration = Duration or 5
-    })
-end
-
--- // 4. LIBRARY INJECTION
-Notify("Evade.GG", "Initializing Core...", 3)
-
-local Libs = Config.Libraries
-getgenv().Evade.Library      = SafeLoad(Libs.Obsidian .. 'Library.lua', "Obsidian UI")
-getgenv().Evade.ThemeManager = SafeLoad(Libs.Obsidian .. 'addons/ThemeManager.lua', "Theme Manager")
-getgenv().Evade.SaveManager  = SafeLoad(Libs.Obsidian .. 'addons/SaveManager.lua', "Save Manager")
-getgenv().Evade.Sense        = SafeLoad(Libs.Sense, "Sense ESP")
-
-if not getgenv().Evade.Library or not getgenv().Evade.Sense then
-    getgenv().EvadeLoaded = false
-    Notify("Evade Critical", "Failed to load libraries. Check Console (F9).", 10)
-    return
-end
-
-if not getgenv().Evade.Sense.EspInterface then
-    getgenv().Evade.Sense.EspInterface = {
+-- Patch Sense Interface (Prevent Nil Errors)
+if not Sense.EspInterface then
+    Sense.EspInterface = {
         getCharacter = function(Player) return Player.Character end,
         getHealth = function(Character) 
             local Hum = Character and Character:FindFirstChild("Humanoid")
@@ -108,72 +55,114 @@ if not getgenv().Evade.Sense.EspInterface then
     }
 end
 
--- // 5. GAME DETECTION LOGIC
-local PlaceID = game.PlaceId
-local Module  = "Universal" 
-
+-- // 4. GAME DATABASE
+-- [PlaceID] = "ModuleName.lua"
 local Games = {
-    Arsenal       = {286090429, 286090429},
-    FNTD2         = {80550384527033, 14816132646},
-    MM2           = {142823291, 335132309},
-    Pressure      = {12552538295},
-    Doors         = {6839171747, 6516141723},
-    AR2           = {863266079, 2376885433, 2376885433} -- Apocalypse Rising 2
+    -- Arsenal
+    [286090429] = "Arsenal.lua",
+    
+    -- Five Nights TD
+    [80550384527033] = "FNTD.lua",
+    [14816132646] = "FNTD.lua",
+    
+    -- Phantom Forces
+    [292439477] = "PhantomForces.lua",
+    [299659045] = "PhantomForces.lua",
+    
+    -- Murder Mystery 2
+    [142823291] = "MM2.lua",
+    [335132309] = "MM2.lua",
+    
+    -- Counter Blox
+    [301549746] = "CounterBlox.lua",
+    [3272915504] = "CounterBlox.lua", -- Remastered
+    
+    -- Trident Survival
+    [13335293290] = "Trident.lua"
 }
 
-for Name, IDs in pairs(Games) do
-    for _, ID in pairs(IDs) do
-        if PlaceID == ID then
-            Module = Name
-            break
-        end
-    end
-end
+-- // 5. DETECTION LOGIC
+local PlaceID = game.PlaceId
+local ModuleName = "Universal.lua" -- Default
+local DetectedName = "Universal"
 
--- Fallback: Name Check
-if Module == "Universal" then
+-- Check ID First (Fastest)
+if Games[PlaceID] then
+    ModuleName = Games[PlaceID]
+    DetectedName = ModuleName:gsub(".lua", "")
+else
+    -- Check Name Fallback (Slower but covers multiple place IDs)
     local Success, Info = pcall(function()
-        return game:GetService("MarketplaceService"):GetProductInfo(PlaceID)
+        return Services.MarketplaceService:GetProductInfo(PlaceID)
     end)
-
+    
     if Success and Info and Info.Name then
         local Name = string.lower(Info.Name)
-        if string.find(Name, "arsenal") then Module = "Arsenal"
-        elseif string.find(Name, "five nights td") or string.find(Name, "fntd") then Module = "FNTD2"
-        elseif string.find(Name, "murder mystery 2") or string.find(Name, "mm2") then Module = "MM2"
-        elseif string.find(Name, "pressure") then Module = "Pressure"
-        elseif string.find(Name, "doors") then Module = "Doors"
-        elseif string.find(Name, "apocalypse rising") or string.find(Name, "ar2") then Module = "AR2"
+        if string.find(Name, "arsenal") then 
+            ModuleName = "Arsenal.lua"; DetectedName = "Arsenal"
+        elseif string.find(Name, "five nights td") or string.find(Name, "fntd") then 
+            ModuleName = "FNTD.lua"; DetectedName = "FNTD"
+        elseif string.find(Name, "phantom forces") then 
+            ModuleName = "PhantomForces.lua"; DetectedName = "Phantom Forces"
+        elseif string.find(Name, "murder mystery 2") or string.find(Name, "mm2") then 
+            ModuleName = "MM2.lua"; DetectedName = "MM2"
+        elseif string.find(Name, "counter blox") then 
+            ModuleName = "CounterBlox.lua"; DetectedName = "Counter Blox"
+        elseif string.find(Name, "trident survival") then
+            ModuleName = "Trident.lua"; DetectedName = "Trident"
         end
     end
 end
 
--- // 6. MODULE EXECUTION
-Notify("Evade.GG", "Game Detected: " .. Module, 5)
-print("----------------------------------------")
-print("[Evade] Target Module: " .. Module)
+-- // 6. UI CONSTRUCTION
+Library.Font = Enum.Font.Ubuntu
 
-local ModuleURL = Config.RepoURL .. Config.Folder .. Module .. ".lua"
-local Success, Err = pcall(function()
-    loadstring(game:HttpGet(ModuleURL))()
+local Window = Library:CreateWindow({
+    Title = "Evade.GG | " .. DetectedName,
+    Center = true, 
+    AutoShow = true, 
+    TabPadding = 8,
+    MenuFadeTime = 0.2
+})
+
+-- // 7. GLOBAL API SETUP
+-- This allows modules to access the window and libraries
+getgenv().Evade = {
+    Library = Library,
+    Window = Window,
+    Services = Services,
+    Sense = Sense,
+    LocalPlayer = LocalPlayer,
+    Camera = Camera,
+    GameMode = DetectedName
+}
+
+-- // 8. LOAD MODULE
+-- This fetches the specific game script (e.g., Modules/Arsenal.lua)
+task.spawn(function()
+    local Url = Repo .. ModuleName
+    local Success, Err = pcall(function()
+        loadstring(game:HttpGet(Url))()
+    end)
+    
+    if not Success then
+        warn("Evade.GG Error: Failed to load module " .. ModuleName)
+        warn(Err)
+        -- Fallback to Universal if specific module fails
+        loadstring(game:HttpGet(Repo .. "Universal.lua"))()
+    end
 end)
 
-if not Success then
-    warn("[Evade] Failed to load " .. Module .. " Module!")
-    warn("[Evade] Error: " .. tostring(Err))
+-- // 9. INIT MANAGERS
+-- These act as placeholders until the Module populates the tabs
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+ThemeManager:SetFolder("Evade")
+SaveManager:SetFolder("Evade/" .. DetectedName)
 
-    Notify("Evade Warning", "Module failed. Loading Universal fallback...", 5)
-
-    local UnivURL = Config.RepoURL .. Config.Folder .. "Universal.lua"
-    local UnivSuccess, UnivErr = pcall(function()
-        loadstring(game:HttpGet(UnivURL))()
-    end)
-
-    if not UnivSuccess then
-        getgenv().EvadeLoaded = false
-        Notify("Evade Error", "Universal Fallback Failed. Script Terminated.", 10)
-        warn("[Evade] Fatal Error: " .. tostring(UnivErr))
-    end
-end
-print("----------------------------------------")
--- Wsg sigma
+-- Notify User
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "Evade.GG",
+    Text = "Loaded: " .. DetectedName,
+    Duration = 5
+})
