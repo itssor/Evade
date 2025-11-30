@@ -1,23 +1,30 @@
--- [[ EVADE.GG | UNIVERSAL MODULE (FIXED) ]]
+-- [[ EVADE.GG | UNIVERSAL MODULE (STABLE + FALLBACK) ]]
 local Evade = getgenv().Evade
 if not Evade then return end
 
 local Library = Evade.Library
-local Window = Evade.Window
 local Services = Evade.Services
 local Sense = Evade.Sense
 local LocalPlayer = Evade.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
--- // DEFINITIONS
-local Options = Library.Options
-local Toggles = Library.Toggles
-
 -- // COMPATIBILITY CHECKS
 local HasMouseMove = (mousemoverel ~= nil)
 local HasHooks = (getrawmetatable ~= nil) and (setreadonly ~= nil)
 local HasDrawing = (Drawing ~= nil)
+
+-- // UI RECOVERY (THE FIX)
+-- If the Loader failed to pass the Window, we create a fallback here.
+local Window = Evade.Window
+if not Window then
+    warn("[Evade] Window missing. Initializing Fallback UI.")
+    Window = Library:CreateWindow({
+        Title = "Evade | Universal (Recovered)",
+        Center = true, AutoShow = true, TabPadding = 8
+    })
+    Evade.Window = Window -- Repair the API
+end
 
 -- // UI SETUP
 local Tabs = {
@@ -145,7 +152,7 @@ local function GetClosestPlayer()
     local Closest = nil
     local ShortestDist = math.huge
     local MousePos = Services.UserInputService:GetMouseLocation()
-    local FOV = Options.FOVRadius.Value
+    local FOV = Library.Options.FOVRadius.Value
     
     for _, Plr in pairs(Services.Players:GetPlayers()) do
         if Plr ~= LocalPlayer then
@@ -153,11 +160,11 @@ local function GetClosestPlayer()
             local Char = (Sense and Sense.EspInterface and Sense.EspInterface.getCharacter(Plr)) or Plr.Character
             
             if Char then
-                if Toggles.TeamCheck.Value and Plr.Team == LocalPlayer.Team then continue end
+                if Library.Toggles.TeamCheck.Value and Plr.Team == LocalPlayer.Team then continue end
                 
-                local Target = Char:FindFirstChild(Options.TargetPart.Value)
+                local Target = Char:FindFirstChild(Library.Options.TargetPart.Value)
                 if Target then
-                     if not Toggles.WallCheck.Value or IsVisible(Target) then
+                     if not Library.Toggles.WallCheck.Value or IsVisible(Target) then
                         local Pos, OnScreen = Camera:WorldToViewportPoint(Target.Position)
                         if OnScreen then
                             local Dist = (MousePos - Vector2.new(Pos.X, Pos.Y)).Magnitude
@@ -182,7 +189,7 @@ if HasHooks then
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         local args = {...}
-        if Toggles.AimbotEnabled.Value and Options.AimbotMethod.Value == "Silent" and not checkcaller() then
+        if Library.Toggles.AimbotEnabled.Value and Library.Options.AimbotMethod.Value == "Silent" and not checkcaller() then
             if method == "FindPartOnRayWithIgnoreList" or method == "Raycast" then
                 local Target = GetClosestPlayer()
                 if Target then
@@ -209,20 +216,20 @@ local function DrawLine() local L = Drawing.new("Line"); L.Visible = false; L.Co
 Services.RunService.RenderStepped:Connect(function()
     -- FOV Update
     if FOVCircle then
-        if Toggles.DrawFOV.Value and Toggles.AimbotEnabled.Value then
+        if Library.Toggles.DrawFOV.Value and Library.Toggles.AimbotEnabled.Value then
             FOVCircle.Visible = true
-            FOVCircle.Radius = Options.FOVRadius.Value
-            FOVCircle.Color = Options.FOVColor.Value
+            FOVCircle.Radius = Library.Options.FOVRadius.Value
+            FOVCircle.Color = Library.Options.FOVColor.Value
             FOVCircle.Position = Services.UserInputService:GetMouseLocation()
         else
             FOVCircle.Visible = false
         end
     end
 
-    -- Hitbox Expander (CB Logic)
-    if Toggles.UniHitbox.Value then
-        local Size = Options.HitboxSize.Value
-        local Trans = Toggles.HitboxVis.Value and 0.5 or 1
+    -- Hitbox Expander
+    if Library.Toggles.UniHitbox.Value then
+        local Size = Library.Options.HitboxSize.Value
+        local Trans = Library.Toggles.HitboxVis.Value and 0.5 or 1
         for _, v in pairs(Services.Players:GetPlayers()) do
             if v ~= LocalPlayer and v.Team ~= LocalPlayer.Team and v.Character then
                 pcall(function()
@@ -235,16 +242,16 @@ Services.RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- Aimbot Execution
-    if Toggles.AimbotEnabled.Value and Options.AimbotKey:GetState() then
-        if not (Toggles.StickyAim.Value and LockedTarget) then LockedTarget = GetClosestPlayer() end
+    -- Aimbot
+    if Library.Toggles.AimbotEnabled.Value and Library.Options.AimbotKey:GetState() then
+        if not (Library.Toggles.StickyAim.Value and LockedTarget) then LockedTarget = GetClosestPlayer() end
         if LockedTarget then
-            local Method = Options.AimbotMethod.Value
+            local Method = Library.Options.AimbotMethod.Value
             if Method == "Camera" then
-                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, LockedTarget.Position), Options.Smoothing.Value)
+                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, LockedTarget.Position), Library.Options.Smoothing.Value)
             elseif Method == "Mouse" and HasMouseMove then
                 local Pos = Camera:WorldToViewportPoint(LockedTarget.Position)
-                mousemoverel((Pos.X - Mouse.X) * Options.Smoothing.Value, ((Pos.Y + 36) - Mouse.Y) * Options.Smoothing.Value)
+                mousemoverel((Pos.X - Mouse.X) * Library.Options.Smoothing.Value, ((Pos.Y + 36) - Mouse.Y) * Library.Options.Smoothing.Value)
             elseif Method == "Position" and LocalPlayer.Character then
                 LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(LocalPlayer.Character.HumanoidRootPart.Position, Vector3.new(LockedTarget.Position.X, LocalPlayer.Character.HumanoidRootPart.Position.Y, LockedTarget.Position.Z))
             end
@@ -253,7 +260,7 @@ Services.RunService.RenderStepped:Connect(function()
 
     -- Skeleton ESP
     for _, v in pairs(Skeletons) do for _, l in pairs(v) do l:Remove() end end; Skeletons = {}
-    if Toggles.ESPSkeleton.Value and HasDrawing then
+    if Library.Toggles.ESPSkeleton.Value and HasDrawing then
         for _, p in pairs(Services.Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
                 local Char = p.Character
@@ -282,7 +289,7 @@ Services.RunService.RenderStepped:Connect(function()
     end
     
     -- Chams
-    if Toggles.ESPChams.Value then
+    if Library.Toggles.ESPChams.Value then
         for _, p in pairs(Services.Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character then
                 if not p.Character:FindFirstChild("EvadeCham") then
@@ -298,7 +305,7 @@ Services.RunService.RenderStepped:Connect(function()
     end
 
     -- Fullbright
-    if Toggles.Fullbright.Value then
+    if Library.Toggles.Fullbright.Value then
         Services.Lighting.Brightness = 2; Services.Lighting.ClockTime = 14; Services.Lighting.FogEnd = 100000
     end
 end)
@@ -306,17 +313,17 @@ end)
 -- // PHYSICS LOOP
 task.spawn(function()
     while true do
-        if Toggles.TriggerBot.Value then
+        if Library.Toggles.TriggerBot.Value then
             local Target = Mouse.Target
             if Target and Target.Parent then
                 local P = Services.Players:GetPlayerFromCharacter(Target.Parent)
-                if P and (not Toggles.TeamCheck.Value or P.Team ~= LocalPlayer.Team) then
-                    task.wait(Options.TriggerDelay.Value / 1000)
+                if P and (not Library.Toggles.TeamCheck.Value or P.Team ~= LocalPlayer.Team) then
+                    task.wait(Library.Options.TriggerDelay.Value / 1000)
                     mouse1click(); task.wait(0.1)
                 end
             end
         end
-        if Toggles.AutoClicker.Value then mouse1click() end
+        if Library.Toggles.AutoClicker.Value then mouse1click() end
         task.wait(0.05)
     end
 end)
@@ -326,14 +333,12 @@ Services.RunService.Stepped:Connect(function()
     local HRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local Hum = LocalPlayer.Character:FindFirstChild("Humanoid")
 
-    -- Click TP
-    if Toggles.ClickTP.Value and Services.UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) and HRP then
+    if Library.Toggles.ClickTP.Value and Services.UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) and Services.UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) and HRP then
         local MousePos = Mouse.Hit.p
         HRP.CFrame = CFrame.new(MousePos + Vector3.new(0, 3, 0)); task.wait(0.1)
     end
 
-    -- Spider
-    if Toggles.Spider.Value and HRP then
+    if Library.Toggles.Spider.Value and HRP then
         local Ray = Ray.new(HRP.Position, HRP.CFrame.LookVector * 2)
         local Part = workspace:FindPartOnRay(Ray, LocalPlayer.Character)
         if Part and Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then
@@ -341,16 +346,13 @@ Services.RunService.Stepped:Connect(function()
         end
     end
 
-    -- Bhop
-    if Toggles.Bhop.Value and Hum and Hum.FloorMaterial ~= Enum.Material.Air then Hum:ChangeState("Jumping") end
+    if Library.Toggles.Bhop.Value and Hum and Hum.FloorMaterial ~= Enum.Material.Air then Hum:ChangeState("Jumping") end
     
-    -- Spinbot
-    if Toggles.SpinBot.Value and HRP then HRP.CFrame = HRP.CFrame * CFrame.Angles(0, math.rad(Options.SpinSpeed.Value), 0) end
+    if Library.Toggles.SpinBot.Value and HRP then HRP.CFrame = HRP.CFrame * CFrame.Angles(0, math.rad(Library.Options.SpinSpeed.Value), 0) end
     
-    -- Flight & Speed
-    if Toggles.FlightEnabled.Value and Options.FlightKey:GetState() and HRP then
-        local Mode = Options.FlightMode.Value
-        local Speed = Options.FlightSpeed.Value
+    if Library.Toggles.FlightEnabled.Value and Library.Options.FlightKey:GetState() and HRP then
+        local Mode = Library.Options.FlightMode.Value
+        local Speed = Library.Options.FlightSpeed.Value
         local Dir = Vector3.zero
         local CamCF = Camera.CFrame
         if Services.UserInputService:IsKeyDown(Enum.KeyCode.W) then Dir = Dir + CamCF.LookVector end
@@ -372,20 +374,20 @@ Services.RunService.Stepped:Connect(function()
         end
     end
     
-    if Toggles.SpeedEnabled.Value and Hum then
-        local Mode = Options.SpeedMode.Value
-        if Mode == "WalkSpeed" then Hum.WalkSpeed = Options.WalkSpeed.Value
-        elseif Mode == "CFrame" and HRP and Hum.MoveDirection.Magnitude > 0 then Hum.WalkSpeed = 16; HRP.CFrame = HRP.CFrame + (Hum.MoveDirection * (Options.WalkSpeed.Value / 100))
-        elseif Mode == "TP" and HRP and Hum.MoveDirection.Magnitude > 0 then Hum.WalkSpeed = 16; HRP.CFrame = HRP.CFrame * CFrame.new(0, 0, -(Options.WalkSpeed.Value / 50)) end
+    if Library.Toggles.SpeedEnabled.Value and Hum then
+        local Mode = Library.Options.SpeedMode.Value
+        if Mode == "WalkSpeed" then Hum.WalkSpeed = Library.Options.WalkSpeed.Value
+        elseif Mode == "CFrame" and HRP and Hum.MoveDirection.Magnitude > 0 then Hum.WalkSpeed = 16; HRP.CFrame = HRP.CFrame + (Hum.MoveDirection * (Library.Options.WalkSpeed.Value / 100))
+        elseif Mode == "TP" and HRP and Hum.MoveDirection.Magnitude > 0 then Hum.WalkSpeed = 16; HRP.CFrame = HRP.CFrame * CFrame.new(0, 0, -(Library.Options.WalkSpeed.Value / 50)) end
     else if Hum and Hum.WalkSpeed ~= 16 then Hum.WalkSpeed = 16 end end
     
-    if Toggles.Noclip.Value and HRP then
+    if Library.Toggles.Noclip.Value and HRP then
         for _,v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
 end)
 
 Services.UserInputService.JumpRequest:Connect(function()
-    if Toggles.InfJump.Value and LocalPlayer.Character then
+    if Library.Toggles.InfJump.Value and LocalPlayer.Character then
         LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
     end
 end)
@@ -395,12 +397,12 @@ local MenuGroup = Tabs.Settings:AddLeftGroupbox("Menu")
 MenuGroup:AddButton("Unload", function() getgenv().EvadeLoaded = false; Library:Unload(); Sense.Unload() end)
 MenuGroup:AddLabel("Keybind"):AddKeyPicker("MenuKey", { Default = "RightShift", NoUI = true, Text = "Menu" })
 
-Library.ToggleKeybind = Options.MenuKey
+Library.ToggleKeybind = Library.Options.MenuKey
 
 Evade.ThemeManager:SetLibrary(Library)
 Evade.SaveManager:SetLibrary(Library)
 Evade.SaveManager:IgnoreThemeSettings()
-Evade.SaveManager:SetIgnoreIndexes({"MenuKey"}) -- THIS IS THE FIX
+Evade.SaveManager:SetIgnoreIndexes({"MenuKey"})
 Evade.SaveManager:SetFolder("Evade")
 Evade.SaveManager:SetFolder("Evade/Universal")
 Evade.SaveManager:BuildConfigSection(Tabs.Settings)
