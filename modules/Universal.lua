@@ -1,4 +1,7 @@
--- // PRE-FLIGHT
+-- [[ EVADE.GG | UNIVERSAL MODULE ]]
+-- Features: All-Game Support + CB Hitbox Logic + Expanded Movement
+
+-- // PRE-FLIGHT CHECKS
 repeat task.wait() until getgenv().Evade
 local Evade = getgenv().Evade
 
@@ -34,7 +37,6 @@ local Tabs = {
 local AimbotGroup = Tabs.Combat:AddLeftGroupbox("Aimbot Engine")
 AimbotGroup:AddToggle("AimbotEnabled", { Text = "Enabled", Default = false })
 AimbotGroup:AddLabel("Keybind"):AddKeyPicker("AimbotKey", { Default = "MB2", Mode = "Hold", Text = "Aim Key" })
--- Added Silent to methods
 AimbotGroup:AddDropdown("AimbotMethod", { Values = {"Camera", "Mouse", "Position", "Silent"}, Default = 1, Multi = false, Text = "Method" })
 AimbotGroup:AddDropdown("TargetPart", { Values = {"Head", "HumanoidRootPart", "Torso"}, Default = 1, Multi = false, Text = "Target Part" })
 AimbotGroup:AddSlider("Smoothing", { Text = "Smoothing", Default = 0.5, Min = 0.01, Max = 1, Rounding = 2 })
@@ -45,10 +47,14 @@ AutoGroup:AddToggle("TriggerBot", { Text = "Trigger Bot", Default = false, Toolt
 AutoGroup:AddSlider("TriggerDelay", { Text = "Trigger Delay", Default = 0, Min = 0, Max = 500, Suffix = "ms" })
 AutoGroup:AddToggle("AutoClicker", { Text = "Auto Clicker (Spam)", Default = false })
 
-local ChecksGroup = Tabs.Combat:AddLeftGroupbox("Settings")
+local HitboxGroup = Tabs.Combat:AddLeftGroupbox("Hitbox Expander")
+HitboxGroup:AddToggle("UniHitbox", { Text = "Universal Expander", Default = false })
+HitboxGroup:AddSlider("HitboxSize", { Text = "Size", Default = 4, Min = 2, Max = 25, Rounding = 1 })
+HitboxGroup:AddToggle("HitboxVis", { Text = "Visible (Debug)", Default = false })
+
+local ChecksGroup = Tabs.Combat:AddRightGroupbox("Settings")
 ChecksGroup:AddToggle("TeamCheck", { Text = "Team Check", Default = true })
 ChecksGroup:AddToggle("WallCheck", { Text = "Wall Check", Default = false })
-ChecksGroup:AddToggle("HitSound", { Text = "Hit Sound", Default = false })
 
 local FovGroup = Tabs.Combat:AddRightGroupbox("FOV")
 FovGroup:AddToggle("DrawFOV", { Text = "Draw FOV", Default = true }):AddColorPicker("FOVColor", { Default = Color3.fromRGB(255, 255, 255) })
@@ -70,7 +76,6 @@ ESPGroup:AddToggle("ESPSkeleton", { Text = "Skeleton ESP", Default = false })
 
 local WorldGroup = Tabs.Visuals:AddRightGroupbox("World")
 WorldGroup:AddToggle("Fullbright", { Text = "Fullbright", Default = false })
-WorldGroup:AddToggle("NoFog", { Text = "No Fog", Default = false })
 WorldGroup:AddToggle("Crosshair", { Text = "Custom Crosshair", Default = false }):AddColorPicker("CrosshairColor", { Default = Color3.fromRGB(0, 255, 0) })
 
 -- // 3. MOVEMENT TAB
@@ -99,7 +104,6 @@ TPGroup:AddSlider("SpinSpeed", { Text = "Spin Speed", Default = 20, Min = 1, Max
 local ServerGroup = Tabs.Utility:AddLeftGroupbox("Server")
 ServerGroup:AddButton("Rejoin Server", function() Services.TeleportService:Teleport(game.PlaceId, LocalPlayer) end)
 ServerGroup:AddButton("Server Hop", function() 
-    -- Simple Hop Logic
     local Http = game:GetService("HttpService")
     local Servers = Http:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
     for _, v in pairs(Servers.data) do
@@ -120,6 +124,32 @@ FPSGroup:AddButton("FPS Booster", function()
     end
 end)
 FPSGroup:AddToggle("AntiAFK", { Text = "Anti-AFK", Default = true })
+
+-- // LOGIC: HITBOX EXPANDER (CB Logic Ported)
+Services.RunService.RenderStepped:Connect(function()
+    if Library.Toggles.UniHitbox.Value then
+        local Size = Library.Options.HitboxSize.Value
+        local Trans = Library.Toggles.HitboxVis.Value and 0.5 or 1
+        
+        for _, v in pairs(Services.Players:GetPlayers()) do
+            if v ~= LocalPlayer and v.Team ~= LocalPlayer.Team and v.Character then
+                pcall(function()
+                    -- Counter Blox / Arsenal Specific Hitboxes
+                    local HitboxParts = {"HeadHB", "Head", "HumanoidRootPart", "Torso", "UpperTorso", "LowerTorso"}
+                    
+                    for _, PartName in pairs(HitboxParts) do
+                        local Part = v.Character:FindFirstChild(PartName)
+                        if Part then
+                            Part.CanCollide = false
+                            Part.Size = Vector3.new(Size, Size, Size)
+                            Part.Transparency = Trans
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end)
 
 -- // LOGIC: AIMBOT & SILENT
 local LockedTarget = nil
@@ -145,7 +175,10 @@ local function GetClosestPlayer()
             local Char = Plr.Character
             if Char then
                 if Library.Toggles.TeamCheck.Value and Plr.Team == LocalPlayer.Team then continue end
-                local Target = Char:FindFirstChild(Library.Options.TargetPart.Value)
+                
+                -- Dynamic Part Selection (Prioritize HeadHB for CB logic)
+                local Target = Char:FindFirstChild("HeadHB") or Char:FindFirstChild(Library.Options.TargetPart.Value)
+                
                 if Target then
                      if not Library.Toggles.WallCheck.Value or IsVisible(Target) then
                         local Pos, OnScreen = Camera:WorldToViewportPoint(Target.Position)
@@ -215,8 +248,6 @@ end)
 
 -- // LOGIC: VISUALS (Skeleton & Chams)
 local Skeletons = {}
-local Chams = {}
-
 local function DrawLine()
     local L = Drawing.new("Line"); L.Visible = false; L.Color = Color3.new(1,1,1); L.Thickness = 1
     return L
@@ -367,8 +398,7 @@ Services.RunService.Stepped:Connect(function()
     else if Hum and Hum.WalkSpeed ~= 16 then Hum.WalkSpeed = 16 end end
     
     if Library.Toggles.Noclip.Value and HRP then
-        if Library.Options.NoclipMode.Value == "Collision" then for _,v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
-        elseif Library.Options.NoclipMode.Value == "CFrame" and Hum.MoveDirection.Magnitude > 0 then HRP.CFrame = HRP.CFrame + (Hum.MoveDirection * 0.5) end
+        for _,v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
 end)
 
