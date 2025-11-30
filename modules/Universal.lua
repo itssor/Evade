@@ -1,4 +1,3 @@
--- [[ EVADE.GG | UNIVERSAL MODULE (FULL FEATURE) ]]
 local Evade = getgenv().Evade
 if not Evade then return end
 
